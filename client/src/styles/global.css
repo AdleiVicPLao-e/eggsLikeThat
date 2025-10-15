@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom animations */
+@keyframes hatchSpin {
+  0% {
+    transform: rotate(0deg) scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.2);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 20px currentColor, 0 0 30px currentColor;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Utility classes */
+.hatch-animation {
+  animation: hatchSpin 1s ease-in-out;
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.shake-animation {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Tier-based colors */
+.tier-common {
+  color: #6b7280;
+}
+.tier-uncommon {
+  color: #10b981;
+}
+.tier-rare {
+  color: #3b82f6;
+}
+.tier-epic {
+  color: #8b5cf6;
+}
+.tier-legendary {
+  color: #f59e0b;
+}
+
+.bg-tier-common {
+  background-color: #6b7280;
+}
+.bg-tier-uncommon {
+  background-color: #10b981;
+}
+.bg-tier-rare {
+  background-color: #3b82f6;
+}
+.bg-tier-epic {
+  background-color: #8b5cf6;
+}
+.bg-tier-legendary {
+  background-color: #f59e0b;
+}
+
+.border-tier-common {
+  border-color: #6b7280;
+}
+.border-tier-uncommon {
+  border-color: #10b981;
+}
+.border-tier-rare {
+  border-color: #3b82f6;
+}
+.border-tier-epic {
+  border-color: #8b5cf6;
+}
+.border-tier-legendary {
+  border-color: #f59e0b;
+}
+
+/* Type-based colors */
+.type-fire {
+  color: #dc2626;
+}
+.type-water {
+  color: #2563eb;
+}
+.type-earth {
+  color: #16a34a;
+}
+.type-air {
+  color: #7dd3fc;
+}
+.type-light {
+  color: #fbbf24;
+}
+.type-dark {
+  color: #7c3aed;
+}
+
+.bg-type-fire {
+  background-color: #dc2626;
+}
+.bg-type-water {
+  background-color: #2563eb;
+}
+.bg-type-earth {
+  background-color: #16a34a;
+}
+.bg-type-air {
+  background-color: #7dd3fc;
+}
+.bg-type-light {
+  background-color: #fbbf24;
+}
+.bg-type-dark {
+  background-color: #7c3aed;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Battle animations */
+@keyframes attack {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(20px);
+  }
+  50% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes takeDamage {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.attack-animation {
+  animation: attack 0.5s ease-in-out;
+}
+
+.damage-animation {
+  animation: takeDamage 0.3s ease-in-out;
+}
+
+/* Gradient backgrounds */
+.gradient-fire {
+  background: linear-gradient(135deg, #dc2626, #f97316);
+}
+
+.gradient-water {
+  background: linear-gradient(135deg, #2563eb, #7dd3fc);
+}
+
+.gradient-earth {
+  background: linear-gradient(135deg, #16a34a, #84cc16);
+}
+
+.gradient-air {
+  background: linear-gradient(135deg, #7dd3fc, #a5f3fc);
+}
+
+.gradient-light {
+  background: linear-gradient(135deg, #fbbf24, #fde68a);
+}
+
+.gradient-dark {
+  background: linear-gradient(135deg, #7c3aed, #c4b5fd);
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Loading animations */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+/* Progress bars */
+.progress-bar {
+  transition: width 0.5s ease-in-out;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobile-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .mobile-text-sm {
+    font-size: 0.875rem;
+  }
+
+  .mobile-p-2 {
+    padding: 0.5rem;
+  }
+}

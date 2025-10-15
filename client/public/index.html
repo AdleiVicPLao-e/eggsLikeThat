@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6366F1" />
+
+    <!-- Primary Meta Tags -->
+    <title>PetVerse - Collect, Battle, and Trade Digital Pets</title>
+    <meta
+      name="title"
+      content="PetVerse - Collect, Battle, and Trade Digital Pets"
+    />
+    <meta
+      name="description"
+      content="Discover, hatch, and collect unique digital pets. Battle with friends, trade in the marketplace, and build your ultimate pet collection in this free-to-play blockchain game."
+    />
+    <meta
+      name="keywords"
+      content="pet game, blockchain, nft, digital pets, trading, battling, collectible, web3, crypto game"
+    />
+    <meta name="author" content="PetVerse Team" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://petverse.game/" />
+    <meta
+      property="og:title"
+      content="PetVerse - Collect, Battle, and Trade Digital Pets"
+    />
+    <meta
+      property="og:description"
+      content="Discover, hatch, and collect unique digital pets. Battle with friends, trade in the marketplace, and build your ultimate pet collection."
+    />
+    <meta property="og:image" content="/assets/ui/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://petverse.game/" />
+    <meta
+      property="twitter:title"
+      content="PetVerse - Collect, Battle, and Trade Digital Pets"
+    />
+    <meta
+      property="twitter:description"
+      content="Discover, hatch, and collect unique digital pets. Battle with friends, trade in the marketplace, and build your ultimate pet collection."
+    />
+    <meta property="twitter:image" content="/assets/ui/og-image.png" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Preload critical resources -->
+    <link
+      rel="preload"
+      href="/assets/fonts/inter-var.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/assets/ui/logo.svg"
+      as="image"
+      type="image/svg+xml"
+    />
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://polygon-rpc.com" />
+    <link rel="preconnect" href="https://rpc-mumbai.maticvigil.com" />
+
+    <!-- Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "PetVerse",
+        "description": "Collect, battle, and trade unique digital pets in this immersive blockchain game",
+        "url": "https://petverse.game",
+        "applicationCategory": "Game",
+        "gamePlatform": "Web Browser",
+        "operatingSystem": "Any",
+        "genre": ["Collectible", "Strategy", "RPG"],
+        "playMode": "Multiplayer",
+        "publisher": {
+          "@type": "Organization",
+          "name": "PetVerse Team"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "screenshot": [
+          "/assets/ui/screenshot-1.png",
+          "/assets/ui/screenshot-2.png",
+          "/assets/ui/screenshot-3.png"
+        ]
+      }
+    </script>
+
+    <style>
+      /* Critical CSS for initial load */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", system-ui, -apple-system, sans-serif;
+        background: #111827;
+        color: #f9fafb;
+        overflow-x: hidden;
+      }
+
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Loading screen styles */
+      .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+      }
+
+      .loading-logo {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 2rem;
+        animation: float 3s ease-in-out infinite;
+      }
+
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #374151;
+        border-top: 4px solid #8b5cf6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      .loading-text {
+        margin-top: 1rem;
+        color: #9ca3af;
+        font-size: 0.875rem;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+
+      /* Hide loading screen when app loads */
+      .loading-screen.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Error boundary styles */
+      .error-boundary {
+        padding: 2rem;
+        text-align: center;
+        background: #1f2937;
+        border-radius: 8px;
+        margin: 2rem;
+      }
+
+      /* Wallet connection modal backdrop */
+      .wallet-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Loading screen -->
+      <div class="loading-screen" id="loadingScreen">
+        <svg
+          class="loading-logo"
+          viewBox="0 0 100 100"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path d="M50 10L70 30L50 50L30 30L50 10Z" fill="#8B5CF6" />
+          <circle cx="50" cy="50" r="20" fill="#F59E0B" />
+          <path d="M40 60L60 60L50 70L40 60Z" fill="#10B981" />
+        </svg>
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading PetVerse...</div>
+      </div>
+
+      <!-- React app will be mounted here -->
+    </div>
+
+    <!-- Error boundary fallback -->
+    <script>
+      // Global error handler
+      window.addEventListener("error", function (e) {
+        console.error("Global error:", e.error);
+
+        // Send error to analytics (if configured)
+        if (window.gtag) {
+          gtag("event", "exception", {
+            description: e.error.message,
+            fatal: true,
+          });
+        }
+      });
+
+      // Remove loading screen when app starts
+      window.addEventListener("DOMContentLoaded", function () {
+        setTimeout(() => {
+          const loadingScreen = document.getElementById("loadingScreen");
+          if (loadingScreen) {
+            loadingScreen.classList.add("hidden");
+          }
+        }, 1000);
+      });
+
+      // Service Worker registration for PWA
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then(function (registration) {
+              console.log("SW registered: ", registration);
+            })
+            .catch(function (registrationError) {
+              console.log("SW registration failed: ", registrationError);
+            });
+        });
+      }
+
+      // Web3 provider detection
+      window.ethereum?.on("chainChanged", (chainId) => {
+        window.location.reload();
+      });
+
+      window.ethereum?.on("accountsChanged", (accounts) => {
+        if (accounts.length === 0) {
+          console.log("Please connect to MetaMask.");
+        }
+      });
+    </script>
+
+    <!-- Environment variables -->
+    <script>
+      window.ENV = {
+        VITE_API_URL: "${import.meta.env.VITE_API_URL}",
+        VITE_PET_NFT_ADDRESS: "${import.meta.env.VITE_PET_NFT_ADDRESS}",
+        VITE_EGG_ITEM_ADDRESS: "${import.meta.env.VITE_EGG_ITEM_ADDRESS}",
+        VITE_MARKETPLACE_ADDRESS: "${import.meta.env.VITE_MARKETPLACE_ADDRESS}",
+        VITE_FUSION_SYSTEM_ADDRESS:
+          "${import.meta.env.VITE_FUSION_SYSTEM_ADDRESS}",
+        VITE_GAME_TOKEN_ADDRESS: "${import.meta.env.VITE_GAME_TOKEN_ADDRESS}",
+        MODE: "${import.meta.env.MODE}",
+      };
+    </script>
+
+    <!-- TypeScript will be handled by Vite -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

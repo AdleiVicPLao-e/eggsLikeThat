@@ -1,0 +1,23 @@
+{
+  "localhost": {
+    "PetNFT": "",
+    "EggItem": "",
+    "Marketplace": "",
+    "FusionSystem": "",
+    "GameToken": ""
+  },
+  "mumbai": {
+    "PetNFT": "",
+    "EggItem": "",
+    "Marketplace": "",
+    "FusionSystem": "",
+    "GameToken": ""
+  },
+  "polygon": {
+    "PetNFT": "",
+    "EggItem": "",
+    "Marketplace": "",
+    "FusionSystem": "",
+    "GameToken": ""
+  }
+}

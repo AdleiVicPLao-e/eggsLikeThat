@@ -1,0 +1,567 @@
+import React, { useState } from "react";
+import { useUser } from "../context/UserContext";
+import { useGame } from "../context/GameContext";
+import { useGameAPI } from "../hooks/useGameAPI";
+import { useBlockchain } from "../hooks/useBlockchain";
+import PetCard from "../components/Pets/PetCard";
+import HatchAnimation from "../components/Game/HatchAnimation";
+import EggCatalog from "../components/Eggs/EggCatalog";
+import { Coins, Zap, Gift, Sparkles, ShoppingCart } from "lucide-react";
+import { rng, previewHatch } from "../utils/rollSystem";
+import { formatCurrency, formatTier, formatType } from "../utils/rarity";
+import { TIERS, TYPES, GAME_CONFIG } from "../utils/constants";
+
+const Hatchery = () => {
+  const { user, isWalletConnected } = useUser();
+  const { pets, eggs, coins, addPet, addEgg, updateCoins, updateFreeRolls } =
+    useGame();
+  const {
+    hatchEgg: apiHatchEgg,
+    purchaseEgg: apiPurchaseEgg,
+    getFreeEgg: apiGetFreeEgg,
+  } = useGameAPI();
+  const {
+    purchaseEgg: blockchainPurchaseEgg,
+    hatchEgg: blockchainHatchEgg,
+    transactionLoading,
+  } = useBlockchain();
+
+  const [newlyHatchedPet, setNewlyHatchedPet] = useState(null);
+  const [showHatchAnimation, setShowHatchAnimation] = useState(false);
+  const [selectedEggType, setSelectedEggType] = useState("BASIC");
+  const [eggPreview, setEggPreview] = useState(null);
+  const [useBlockchainHatch, setUseBlockchainHatch] = useState(false);
+
+  // Generate egg preview
+  const generateEggPreview = () => {
+    const preview = previewHatch(selectedEggType);
+    setEggPreview(preview);
+  };
+
+  // Purchase egg with coins or blockchain
+  const purchaseEgg = async (eggType, currency = "coins") => {
+    if (!user) return;
+
+    try {
+      if (currency === "coins") {
+        // Purchase with in-game coins (backend)
+        const result = await apiPurchaseEgg({ eggType, currency });
+        if (result.success) {
+          addEgg(result.data.egg);
+          updateCoins(-result.data.egg.purchasePrice);
+        }
+      } else {
+        // Purchase with crypto (blockchain)
+        if (!isWalletConnected) {
+          alert("Please connect your wallet to purchase with cryptocurrency");
+          return;
+        }
+
+        const result = await blockchainPurchaseEgg(
+          getEggTypeId(eggType),
+          1 // amount
+        );
+
+        if (result.success) {
+          // The backend will sync the egg via event listener
+          alert(
+            "Egg purchased successfully! It will appear in your inventory shortly."
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to purchase egg:", error);
+      alert(`Purchase failed: ${error.message}`);
+    }
+  };
+
+  // Claim free daily egg
+  const claimFreeEgg = async () => {
+    if (!user) return;
+
+    try {
+      const result = await apiGetFreeEgg();
+      if (result.success) {
+        addEgg(result.data.egg);
+        alert("Free egg claimed successfully!");
+      }
+    } catch (error) {
+      console.error("Failed to claim free egg:", error);
+      alert(`Failed to claim free egg: ${error.message}`);
+    }
+  };
+
+  // Hatch egg (backend or blockchain)
+  const hatchEgg = async (eggId = null, useBlockchain = false) => {
+    if (!user) return;
+
+    // Check if using free roll or has enough coins
+    const canUseFreeRoll = user.freeRolls > 0;
+    const hatchCost = GAME_CONFIG.HATCH_COST;
+
+    if (!canUseFreeRoll && coins < hatchCost) {
+      alert(`Not enough coins! Hatching costs ${hatchCost} coins.`);
+      return;
+    }
+
+    setShowHatchAnimation(true);
+
+    try {
+      let result;
+
+      if (useBlockchain) {
+        if (!isWalletConnected) {
+          alert("Please connect your wallet to hatch on blockchain");
+          setShowHatchAnimation(false);
+          return;
+        }
+
+        // Hatch on blockchain
+        result = await blockchainHatchEgg(getEggTypeId(selectedEggType));
+      } else {
+        // Hatch via backend API
+        result = await apiHatchEgg({
+          eggId,
+          useFreeRoll: canUseFreeRoll,
+          eggType: selectedEggType,
+        });
+      }
+
+      if (result.success) {
+        // Update local state
+        if (result.data.pet) {
+          addPet(result.data.pet);
+          setNewlyHatchedPet(result.data.pet);
+        }
+
+        if (!canUseFreeRoll) {
+          updateCoins(-hatchCost);
+        } else {
+          updateFreeRolls(-1);
+        }
+
+        // Auto-hide animation after delay
+        setTimeout(() => setShowHatchAnimation(false), 3000);
+      }
+    } catch (error) {
+      console.error("Hatching failed:", error);
+      alert(`Hatching failed: ${error.message}`);
+      setShowHatchAnimation(false);
+    }
+  };
+
+  // Quick hatch (no specific egg)
+  const quickHatch = () => {
+    hatchEgg(null, useBlockchainHatch);
+  };
+
+  // Helper function to get egg type ID
+  const getEggTypeId = (eggType) => {
+    const eggTypes = { BASIC: 0, PREMIUM: 1, COSMETIC: 2, MYSTERY: 3 };
+    return eggTypes[eggType] || 0;
+  };
+
+  // Get egg cost
+  const getEggCost = (eggType, currency = "coins") => {
+    const costs = {
+      BASIC: { coins: 100, ETH: 0.001 },
+      PREMIUM: { coins: 250, ETH: 0.005 },
+      COSMETIC: { coins: 150, ETH: 0.003 },
+      MYSTERY: { coins: 200, ETH: 0.004 },
+    };
+    return costs[eggType]?.[currency] || costs.BASIC.coins;
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-white mb-4">
+            Connect Your Wallet
+          </h2>
+          <p className="text-gray-400">
+            Please connect your wallet to access the hatchery
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-4xl font-bold text-white mb-4">Hatchery</h1>
+          <p className="text-gray-300 text-lg max-w-2xl mx-auto">
+            Discover amazing pets by hatching eggs. Use coins or connect your
+            wallet for blockchain eggs!
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column - Egg Selection & Purchase */}
+          <div className="space-y-6">
+            {/* Egg Type Selection */}
+            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+              <h3 className="text-xl font-bold text-white mb-4">
+                Select Egg Type
+              </h3>
+
+              <div className="space-y-3">
+                {["BASIC", "PREMIUM", "COSMETIC", "MYSTERY"].map((eggType) => (
+                  <button
+                    key={eggType}
+                    onClick={() => {
+                      setSelectedEggType(eggType);
+                      generateEggPreview();
+                    }}
+                    className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                      selectedEggType === eggType
+                        ? "border-blue-500 bg-blue-500 bg-opacity-10"
+                        : "border-gray-600 hover:border-gray-500"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-white">{eggType} Egg</h4>
+                        <p className="text-gray-400 text-sm">
+                          {
+                            TIERS[
+                              eggType === "PREMIUM"
+                                ? "UNCOMMON"
+                                : eggType === "MYSTERY"
+                                ? "RARE"
+                                : "COMMON"
+                            ]?.description
+                          }
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-yellow-400 font-bold">
+                          {formatCurrency(
+                            getEggCost(eggType, "coins"),
+                            "coins"
+                          )}
+                        </div>
+                        {isWalletConnected && (
+                          <div className="text-blue-400 text-sm">
+                            {formatCurrency(getEggCost(eggType, "ETH"), "ETH")}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Purchase Options */}
+              <div className="mt-6 space-y-3">
+                <button
+                  onClick={() => purchaseEgg(selectedEggType, "coins")}
+                  disabled={coins < getEggCost(selectedEggType, "coins")}
+                  className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
+                >
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Buy with Coins
+                </button>
+
+                {isWalletConnected && (
+                  <button
+                    onClick={() => purchaseEgg(selectedEggType, "ETH")}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
+                  >
+                    <Zap className="w-5 h-5 mr-2" />
+                    Buy with Crypto
+                  </button>
+                )}
+
+                {/* Free Egg Claim */}
+                <button
+                  onClick={claimFreeEgg}
+                  disabled={user.freeRolls === 0}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
+                >
+                  <Gift className="w-5 h-5 mr-2" />
+                  Free Daily Egg ({user.freeRolls || 0} left)
+                </button>
+              </div>
+            </div>
+
+            {/* Egg Preview */}
+            {eggPreview && (
+              <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+                <h3 className="text-xl font-bold text-white mb-4">
+                  Possible Outcomes
+                </h3>
+                <div className="space-y-3">
+                  {eggPreview.map((pet, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`w-8 h-8 rounded-full ${
+                            formatTier(pet.tier).bgColor
+                          } flex items-center justify-center text-white text-sm`}
+                        >
+                          {formatTier(pet.tier).emoji}
+                        </div>
+                        <div>
+                          <div className="text-white font-medium">
+                            {formatTier(pet.tier).name}
+                          </div>
+                          <div className="text-gray-400 text-sm">
+                            {formatType(pet.type).name}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-blue-400 text-sm font-medium">
+                        {pet.probability}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Center Column - Hatching Area */}
+          <div className="space-y-8">
+            {/* Egg Display & Hatching */}
+            <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
+              <div className="text-center">
+                {showHatchAnimation ? (
+                  <HatchAnimation
+                    isHatching={showHatchAnimation}
+                    onComplete={() => setShowHatchAnimation(false)}
+                    eggType={selectedEggType}
+                  />
+                ) : (
+                  <>
+                    <div className="w-48 h-48 mx-auto mb-6 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-6xl float-animation relative">
+                      🥚
+                    </div>
+
+                    <h3 className="text-2xl font-bold text-white mb-2">
+                      {selectedEggType} Egg
+                    </h3>
+                    <p className="text-gray-400 mb-6">
+                      Ready to hatch an amazing pet!
+                    </p>
+
+                    {/* Hatch Options */}
+                    <div className="space-y-4">
+                      <button
+                        onClick={quickHatch}
+                        disabled={
+                          transactionLoading ||
+                          (user.freeRolls === 0 &&
+                            coins < GAME_CONFIG.HATCH_COST)
+                        }
+                        className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
+                      >
+                        {transactionLoading ? (
+                          <span className="flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Hatching...
+                          </span>
+                        ) : user.freeRolls > 0 ? (
+                          `Hatch with Free Roll (${user.freeRolls} left)`
+                        ) : (
+                          `Hatch Egg (${GAME_CONFIG.HATCH_COST} Coins)`
+                        )}
+                      </button>
+
+                      {isWalletConnected && (
+                        <div className="flex items-center justify-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="blockchainHatch"
+                            checked={useBlockchainHatch}
+                            onChange={(e) =>
+                              setUseBlockchainHatch(e.target.checked)
+                            }
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <label
+                            htmlFor="blockchainHatch"
+                            className="text-gray-300 text-sm"
+                          >
+                            Hatch on Blockchain
+                          </label>
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Newly Hatched Pet */}
+            {newlyHatchedPet && !showHatchAnimation && (
+              <div className="bg-gray-800 rounded-2xl p-6 border-2 border-green-500 pulse-glow">
+                <h3 className="text-xl font-bold text-white mb-4 text-center flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
+                  New Pet Hatched!
+                  <Sparkles className="w-5 h-5 ml-2 text-yellow-400" />
+                </h3>
+                <div className="flex justify-center">
+                  <div className="w-64">
+                    <PetCard pet={newlyHatchedPet} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column - Stats & Inventory */}
+          <div className="space-y-6">
+            {/* Player Stats */}
+            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+              <h3 className="text-xl font-bold text-white mb-4">Your Stats</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 text-yellow-400 mb-2">
+                    <Coins className="w-5 h-5" />
+                    <span className="font-bold">Coins</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {formatCurrency(coins, "coins")}
+                  </div>
+                </div>
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 text-green-400 mb-2">
+                    <Gift className="w-5 h-5" />
+                    <span className="font-bold">Free Rolls</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {user.freeRolls || 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Wallet Status */}
+              {isWalletConnected && (
+                <div className="mt-4 p-3 bg-blue-500 bg-opacity-20 rounded-lg border border-blue-500">
+                  <div className="text-blue-400 text-sm font-medium">
+                    🦊 Wallet Connected
+                  </div>
+                  <div className="text-gray-300 text-xs mt-1">
+                    Ready for blockchain transactions
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Egg Inventory */}
+            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white">Your Eggs</h3>
+                <span className="text-gray-400 text-sm">
+                  {eggs.length} total
+                </span>
+              </div>
+
+              {eggs.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-6xl mb-4">🥚</div>
+                  <p className="text-gray-400">No eggs yet</p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Purchase some eggs to get started!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                  {eggs.slice(0, 5).map((egg) => (
+                    <div
+                      key={egg.id}
+                      className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center">
+                          🥚
+                        </div>
+                        <div>
+                          <div className="text-white font-medium">
+                            {egg.eggType} Egg
+                          </div>
+                          <div className="text-gray-400 text-sm capitalize">
+                            {egg.rarity.toLowerCase()} •{" "}
+                            {egg.isHatched ? "Hatched" : "Ready"}
+                          </div>
+                        </div>
+                      </div>
+                      {!egg.isHatched && (
+                        <button
+                          onClick={() => hatchEgg(egg.id, useBlockchainHatch)}
+                          className="px-3 py-1 bg-green-500 hover:bg-green-600 rounded text-white text-sm transition-colors"
+                        >
+                          Hatch
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {eggs.length > 5 && (
+                    <div className="text-center pt-2">
+                      <span className="text-gray-400 text-sm">
+                        +{eggs.length - 5} more eggs
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Pet Inventory Summary */}
+            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+              <h3 className="text-xl font-bold text-white mb-4">
+                Your Pets ({pets.length})
+              </h3>
+              {pets.length === 0 ? (
+                <p className="text-gray-400 text-center py-4">
+                  No pets yet. Hatch some eggs!
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {/* Tier Summary */}
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {Object.entries(TIERS).map(([tier, data]) => {
+                      const count = pets.filter(
+                        (pet) => pet.tier === tier
+                      ).length;
+                      if (count === 0) return null;
+
+                      return (
+                        <div
+                          key={tier}
+                          className="flex items-center justify-between p-2 bg-gray-700 rounded"
+                        >
+                          <span className={`${data.textColor} font-medium`}>
+                            {data.emoji} {tier}
+                          </span>
+                          <span className="text-white">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-600">
+                    <p className="text-gray-400 text-sm text-center">
+                      View all pets in your collection
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Hatchery;

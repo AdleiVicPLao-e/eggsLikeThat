@@ -1,0 +1,6 @@
+Contact: security@petverse.game
+Expires: 2024-12-31T23:59:59.000Z
+Encryption: https://petverse.game/.well-known/pgp-key.txt
+Acknowledgments: https://petverse.game/security-hall-of-fame
+Policy: https://petverse.game/security-policy
+Preferred-Languages: en

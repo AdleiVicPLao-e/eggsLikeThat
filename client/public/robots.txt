@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://petverse.game/sitemap.xml
+
+# Allow all crawlers for SEO
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+
+# Crawl delay (requests per second)
+Crawl-delay: 1

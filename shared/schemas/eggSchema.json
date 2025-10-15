@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Egg",
+  "description": "Egg data schema for PetVerse game",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the egg"
+    },
+    "eggType": {
+      "type": "string",
+      "description": "Type of egg",
+      "enum": ["BASIC", "PREMIUM", "COSMETIC", "MYSTERY"]
+    },
+    "rarity": {
+      "type": "string",
+      "description": "Rarity of the egg",
+      "enum": ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+    },
+    "owner": {
+      "type": "string",
+      "description": "Wallet address of the egg owner"
+    },
+    "isHatched": {
+      "type": "boolean",
+      "description": "Whether the egg has been hatched"
+    },
+    "hatchDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the egg was hatched (if hatched)"
+    },
+    "skin": {
+      "type": "string",
+      "description": "Cosmetic skin applied to the egg",
+      "default": "default"
+    },
+    "animation": {
+      "type": "string",
+      "description": "Hatch animation type",
+      "default": "default"
+    },
+    "purchased": {
+      "type": "boolean",
+      "description": "Whether the egg was purchased",
+      "default": false
+    },
+    "purchasePrice": {
+      "type": "number",
+      "description": "Price paid for the egg",
+      "minimum": 0,
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "description": "Currency used for purchase",
+      "enum": ["coins", "ETH", "MATIC", "USDC"],
+      "default": "coins"
+    },
+    "potentialPets": {
+      "type": "array",
+      "description": "Possible pets that can hatch from this egg",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["FIRE", "WATER", "EARTH", "AIR", "LIGHT", "DARK"]
+          },
+          "weight": {
+            "type": "integer",
+            "description": "Probability weight for this pet",
+            "minimum": 1
+          }
+        },
+        "required": ["tier", "type", "weight"],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the egg was created"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the egg was last updated"
+    }
+  },
+  "required": [
+    "id",
+    "eggType",
+    "rarity",
+    "owner",
+    "isHatched",
+    "potentialPets"
+  ],
+  "additionalProperties": false
+}
