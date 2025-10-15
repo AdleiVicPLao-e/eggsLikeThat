@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pet",
+  "description": "Pet data schema for PetVerse game",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the pet"
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of the pet",
+      "minLength": 1,
+      "maxLength": 50
+    },
+    "tier": {
+      "type": "string",
+      "description": "Rarity tier of the pet",
+      "enum": ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+    },
+    "type": {
+      "type": "string",
+      "description": "Element type of the pet",
+      "enum": ["FIRE", "WATER", "EARTH", "AIR", "LIGHT", "DARK"]
+    },
+    "level": {
+      "type": "integer",
+      "description": "Current level of the pet",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "experience": {
+      "type": "integer",
+      "description": "Current experience points",
+      "minimum": 0
+    },
+    "stats": {
+      "type": "object",
+      "description": "Base stats of the pet",
+      "properties": {
+        "attack": {
+          "type": "integer",
+          "description": "Attack power",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "defense": {
+          "type": "integer",
+          "description": "Defense power",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "speed": {
+          "type": "integer",
+          "description": "Speed stat",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "health": {
+          "type": "integer",
+          "description": "Health points",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": ["attack", "defense", "speed", "health"],
+      "additionalProperties": false
+    },
+    "abilities": {
+      "type": "array",
+      "description": "List of abilities the pet knows",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique ability identifier"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the ability"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of what the ability does"
+          },
+          "power": {
+            "type": "integer",
+            "description": "Base power of the ability",
+            "minimum": 0
+          },
+          "cooldown": {
+            "type": "integer",
+            "description": "Turns before ability can be used again",
+            "minimum": 0
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of ability",
+            "enum": ["OFFENSIVE", "DEFENSIVE", "SUPPORT", "DEBUFF"]
+          },
+          "manaCost": {
+            "type": "integer",
+            "description": "Mana cost to use the ability",
+            "minimum": 0
+          }
+        },
+        "required": ["id", "name", "description", "power", "cooldown", "type"],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 3
+    },
+    "owner": {
+      "type": "string",
+      "description": "Wallet address of the pet owner"
+    },
+    "tokenId": {
+      "type": "string",
+      "description": "Blockchain token ID (if minted as NFT)"
+    },
+    "network": {
+      "type": "string",
+      "description": "Blockchain network",
+      "enum": ["ethereum", "polygon", null]
+    },
+    "hatchDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the pet was hatched"
+    },
+    "isFavorite": {
+      "type": "boolean",
+      "description": "Whether the pet is marked as favorite"
+    },
+    "battlesWon": {
+      "type": "integer",
+      "description": "Number of battles won",
+      "minimum": 0
+    },
+    "battlesLost": {
+      "type": "integer",
+      "description": "Number of battles lost",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "tier",
+    "type",
+    "level",
+    "experience",
+    "stats",
+    "abilities",
+    "owner"
+  ],
+  "additionalProperties": false
+}
