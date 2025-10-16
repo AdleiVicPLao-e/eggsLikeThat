@@ -1,7 +1,7 @@
 // Re-export shared constants
-export { default as TIERS } from "pet-game-shared/constants/tiers.json";
-export { default as TYPES } from "pet-game-shared/constants/types.json";
-export { default as ABILITIES } from "pet-game-shared/constants/abilities.json";
+export { default as TIERS } from "pet-game-shared";
+export { default as TYPES } from "pet-game-shared";
+export { default as ABILITIES } from "pet-game-shared";
 
 // Client-specific constants
 export const CONTRACT_ADDRESSES = {

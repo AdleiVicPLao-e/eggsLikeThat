@@ -1,10 +1,9 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Rarity colors for pets
         rarity: {
           common: "#6B7280",
           uncommon: "#10B981",

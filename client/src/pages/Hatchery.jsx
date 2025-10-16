@@ -5,7 +5,6 @@ import { useGameAPI } from "../hooks/useGameAPI";
 import { useBlockchain } from "../hooks/useBlockchain";
 import PetCard from "../components/Pets/PetCard";
 import HatchAnimation from "../components/Game/HatchAnimation";
-import EggCatalog from "../components/Eggs/EggCatalog";
 import { Coins, Zap, Gift, Sparkles, ShoppingCart } from "lucide-react";
 import { rng, previewHatch } from "../utils/rollSystem";
 import { formatCurrency, formatTier, formatType } from "../utils/rarity";

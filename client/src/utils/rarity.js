@@ -1,5 +1,5 @@
 import { TIERS, TYPES } from "./constants.js";
-import Formatters from "pet-game-shared/utils/formatters.js";
+import { Formatters } from "pet-game-shared";
 
 // Re-export shared formatters
 export const {
