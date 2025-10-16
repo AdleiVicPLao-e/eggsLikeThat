@@ -1,6 +1,6 @@
 // Export utilities
 export * from "./utils/rng.js";
-export * from "./utils/formatters.js";
+export * from "./utils/formatter.js";
 
 // Export constants
 export { default as TIERS } from "./constants/tiers.json";
