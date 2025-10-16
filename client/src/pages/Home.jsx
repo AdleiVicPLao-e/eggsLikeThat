@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 import { useGame } from "../context/GameContext";
 import {
@@ -10,14 +10,77 @@ import {
   Zap,
   Coins,
   Sparkles,
+  GamepadIcon,
+  Shield,
+  Mail,
+  UserPlus,
 } from "lucide-react";
 import PetCard from "../components/Pets/PetCard";
 import { formatTier, formatType, formatCurrency } from "../utils/rarity";
 import { TIERS, TYPES } from "../utils/constants";
 
 const Home = () => {
-  const { user, isAuthenticated, isGuest } = useUser();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    showAuthModal,
+    setShowAuthModal,
+    setAuthMode,
+    connectWallet,
+  } = useUser();
   const { pets, eggs, lastSync } = useGame();
+  const navigate = useNavigate();
+
+  // Auto-show auth modal if not authenticated on certain actions
+  const requireAuth = (action) => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      setAuthMode("login");
+      return false;
+    }
+    return true;
+  };
+
+  const handleQuickHatch = () => {
+    if (requireAuth()) {
+      navigate("/hatchery");
+    }
+  };
+
+  const handleQuickBattle = () => {
+    if (requireAuth()) {
+      navigate("/battle");
+    }
+  };
+
+  const handleConnectWallet = async () => {
+    if (!isAuthenticated) {
+      setShowAuthModal(true);
+      setAuthMode("register");
+      return;
+    }
+
+    const result = await connectWallet();
+    if (result.success) {
+      alert("Wallet connected successfully!");
+    }
+  };
+
+  const handleCreateAccount = () => {
+    setShowAuthModal(true);
+    setAuthMode("register");
+  };
+
+  const handleLogin = () => {
+    setShowAuthModal(true);
+    setAuthMode("login");
+  };
+
+  const handleGuestPlay = () => {
+    setShowAuthModal(true);
+    setAuthMode("guest");
+  };
 
   const recentPets = pets.slice(-3).reverse();
   const stats = {
@@ -42,10 +105,12 @@ const Home = () => {
         "Discover unique pets with different rarities and abilities. Free daily eggs available!",
       color: "from-purple-500 to-pink-500",
       path: "/hatchery",
-      status:
-        user?.freeRolls > 0
+      requiresAuth: true,
+      status: isAuthenticated
+        ? user?.freeRolls > 0
           ? `${user.freeRolls} free rolls available`
-          : "Claim your daily egg",
+          : "Claim your daily egg"
+        : "Sign up to start",
     },
     {
       icon: Sword,
@@ -54,7 +119,10 @@ const Home = () => {
         "Test your pets in strategic battles. Earn coins, experience, and rare items!",
       color: "from-red-500 to-orange-500",
       path: "/battle",
-      status: `Level ${user?.level || 1} - ${user?.battlesWon || 0} wins`,
+      requiresAuth: true,
+      status: isAuthenticated
+        ? `Level ${user?.level || 1} - ${user?.battlesWon || 0} wins`
+        : "Create account to battle",
     },
     {
       icon: Users,
@@ -63,7 +131,10 @@ const Home = () => {
         "Buy, sell, and trade pets with other players. Secure blockchain transactions.",
       color: "from-green-500 to-blue-500",
       path: "/marketplace",
-      status: `${formatCurrency(user?.coins || 0, "coins")} available`,
+      requiresAuth: true,
+      status: isAuthenticated
+        ? `${formatCurrency(user?.coins || 0, "coins")} available`
+        : "Trade with other players",
     },
     {
       icon: TrendingUp,
@@ -71,37 +142,92 @@ const Home = () => {
       description:
         "Combine pets to create powerful new companions with enhanced abilities.",
       color: "from-yellow-500 to-red-500",
-      path: "/hatchery",
-      status: pets.length >= 2 ? "Ready to fuse!" : "Need 2+ pets",
+      path: "/fusion",
+      requiresAuth: true,
+      status: isAuthenticated
+        ? pets.length >= 2
+          ? "Ready to fuse!"
+          : "Need 2+ pets"
+        : "Unlock advanced features",
     },
   ];
 
   const quickActions = [
     {
       icon: Zap,
+      label: "Quick Hatch",
+      description: "Hatch a new pet instantly",
+      action: handleQuickHatch,
+      color: "from-purple-500 to-pink-500",
+      available: isAuthenticated && (user?.freeRolls > 0 || user?.coins >= 100),
+      requiresAuth: true,
+    },
+    {
+      icon: Sword,
       label: "Quick Battle",
       description: "Jump into instant PvE battle",
-      action: () => (window.location.href = "/battle"),
-      color: "from-yellow-500 to-orange-500",
-      available: pets.length > 0,
+      action: handleQuickBattle,
+      color: "from-red-500 to-orange-500",
+      available: isAuthenticated && pets.length > 0,
+      requiresAuth: true,
     },
     {
       icon: Coins,
       label: "Daily Reward",
       description: "Claim your daily coins and rewards",
-      action: () => (window.location.href = "/profile"),
+      action: () => navigate("/profile"),
       color: "from-green-500 to-emerald-500",
-      available: true,
-    },
-    {
-      icon: Sparkles,
-      label: "Hatch Egg",
-      description: "Use a free roll to hatch new pet",
-      action: () => (window.location.href = "/hatchery"),
-      color: "from-purple-500 to-pink-500",
-      available: user?.freeRolls > 0,
+      available: isAuthenticated,
+      requiresAuth: true,
     },
   ];
+
+  const authOptions = [
+    {
+      icon: UserPlus,
+      title: "Create Account",
+      description:
+        "Sign up with email to save your progress and access all features",
+      action: handleCreateAccount,
+      color: "from-blue-500 to-purple-600",
+      highlight: true,
+    },
+    {
+      icon: Mail,
+      title: "Sign In",
+      description:
+        "Already have an account? Sign in to continue your adventure",
+      action: handleLogin,
+      color: "from-green-500 to-blue-600",
+    },
+    {
+      icon: GamepadIcon,
+      title: "Play as Guest",
+      description:
+        "Start playing immediately without an account (progress saved for 24 hours)",
+      action: handleGuestPlay,
+      color: "from-gray-500 to-gray-700",
+    },
+    {
+      icon: Shield,
+      title: "Connect Wallet",
+      description:
+        "Use your crypto wallet to access blockchain features and trading",
+      action: handleConnectWallet,
+      color: "from-orange-500 to-red-600",
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white">Loading PetVerse...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -121,31 +247,63 @@ const Home = () => {
         </h1>
 
         <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-          Collect, battle, and trade unique digital pets in this immersive
-          blockchain game. Hatch eggs, discover rare companions, and build your
-          ultimate team.
+          Collect, battle, and trade unique digital pets. Start playing
+          instantly, connect your wallet later for advanced features!
         </p>
 
         {!isAuthenticated ? (
-          <div className="space-y-6">
-            <p className="text-gray-400 text-lg">
-              Start your pet collection journey today!
-            </p>
-            <div className="flex justify-center space-x-4">
-              <Link
-                to="/hatchery"
-                className="bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 px-8 py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
-              >
-                Play as Guest
-              </Link>
-              <button
-                onClick={() =>
-                  document.querySelector('button[class*="Connect"]')?.click()
-                }
-                className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
-              >
-                Connect Wallet
-              </button>
+          <div className="space-y-8">
+            {/* Authentication Options Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+              {authOptions.map((option, index) => {
+                const Icon = option.icon;
+                return (
+                  <button
+                    key={index}
+                    onClick={option.action}
+                    className={`bg-gray-800 rounded-xl p-6 border-2 ${
+                      option.highlight
+                        ? "border-blue-500 bg-blue-500 bg-opacity-10"
+                        : "border-gray-700 hover:border-gray-500"
+                    } transition-all hover:transform hover:scale-105 text-left group`}
+                  >
+                    <div
+                      className={`w-12 h-12 rounded-lg bg-gradient-to-r ${option.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+                    >
+                      <Icon className="w-6 h-6 text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">
+                      {option.title}
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      {option.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Benefits Section */}
+            <div className="max-w-2xl mx-auto">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="text-2xl mb-2">🎮</div>
+                  <div className="text-white font-semibold">Free to Play</div>
+                  <div className="text-gray-400 text-sm">No cost to start</div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="text-2xl mb-2">⚡</div>
+                  <div className="text-white font-semibold">Instant Access</div>
+                  <div className="text-gray-400 text-sm">Start in seconds</div>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <div className="text-2xl mb-2">🔒</div>
+                  <div className="text-white font-semibold">
+                    Wallet Optional
+                  </div>
+                  <div className="text-gray-400 text-sm">Connect anytime</div>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -194,6 +352,23 @@ const Home = () => {
                 <div className="text-gray-400 text-sm">Coins</div>
               </div>
             </div>
+
+            {/* Wallet Status */}
+            {!user?.walletAddress && (
+              <div className="max-w-md mx-auto">
+                <button
+                  onClick={handleConnectWallet}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center space-x-2"
+                >
+                  <Shield className="w-5 h-5" />
+                  <span>Connect Wallet for Trading</span>
+                </button>
+                <p className="text-gray-400 text-sm mt-2 text-center">
+                  Optional: Connect your wallet to unlock marketplace trading
+                  and blockchain features
+                </p>
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -232,10 +407,17 @@ const Home = () => {
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <Link
+              <div
                 key={index}
-                to={feature.path}
-                className="bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-gray-500 transition-all hover:transform hover:scale-105 group card-hover"
+                onClick={() => {
+                  if (feature.requiresAuth && !isAuthenticated) {
+                    setShowAuthModal(true);
+                    setAuthMode("register");
+                    return;
+                  }
+                  navigate(feature.path);
+                }}
+                className="bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-gray-500 transition-all hover:transform hover:scale-105 group cursor-pointer card-hover"
               >
                 <div
                   className={`w-12 h-12 rounded-lg bg-gradient-to-r ${feature.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
@@ -246,12 +428,16 @@ const Home = () => {
                   {feature.title}
                 </h3>
                 <p className="text-gray-400 mb-3">{feature.description}</p>
-                {isAuthenticated && (
-                  <div className="text-sm text-blue-400 font-medium">
-                    {feature.status}
-                  </div>
-                )}
-              </Link>
+                <div
+                  className={`text-sm font-medium ${
+                    feature.requiresAuth && !isAuthenticated
+                      ? "text-orange-400"
+                      : "text-blue-400"
+                  }`}
+                >
+                  {feature.status}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -350,22 +536,22 @@ const Home = () => {
             </h2>
             <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
               Join thousands of players collecting and battling with unique
-              pets. No wallet required to start playing!
+              pets. Choose your preferred way to start playing!
             </p>
             <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-              <Link
-                to="/hatchery"
-                className="bg-white text-blue-600 hover:bg-blue-50 px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105"
-              >
-                Start Playing Free
-              </Link>
               <button
-                onClick={() =>
-                  document.querySelector('button[class*="Connect"]')?.click()
-                }
-                className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-blue-600 px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105"
+                onClick={handleCreateAccount}
+                className="bg-white text-blue-600 hover:bg-blue-50 px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2"
               >
-                Connect Wallet
+                <UserPlus className="w-5 h-5" />
+                <span>Create Free Account</span>
+              </button>
+              <button
+                onClick={handleGuestPlay}
+                className="bg-transparent border-2 border-white text-white hover:bg-white hover:text-blue-600 px-8 py-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2"
+              >
+                <GamepadIcon className="w-5 h-5" />
+                <span>Play as Guest</span>
               </button>
             </div>
           </div>

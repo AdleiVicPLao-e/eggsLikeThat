@@ -11,6 +11,9 @@ import {
   Trophy,
   Zap,
   Users,
+  Mail,
+  Shield,
+  GamepadIcon,
 } from "lucide-react";
 import PetCard from "../components/Pets/PetCard";
 import {
@@ -22,7 +25,7 @@ import {
 import { TIERS } from "../utils/constants";
 
 const Profile = () => {
-  const { user, isWalletConnected } = useUser();
+  const { user, isAuthenticated, hasWallet, connectWallet } = useUser();
   const { pets, eggs, battleTeam, lastSync } = useGame();
   const { getBalance, getTokenBalance } = useBlockchain();
 
@@ -32,10 +35,10 @@ const Profile = () => {
 
   // Load blockchain data when user is connected
   React.useEffect(() => {
-    if (user?.walletAddress && isWalletConnected) {
+    if (user?.walletAddress && hasWallet) {
       loadBlockchainData();
     }
-  }, [user?.walletAddress, isWalletConnected]);
+  }, [user?.walletAddress, hasWallet]);
 
   // Calculate profile stats
   React.useEffect(() => {
@@ -115,16 +118,33 @@ const Profile = () => {
     });
   };
 
-  if (!user) {
+  // Not authenticated view
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
         <div className="text-center">
+          <div className="text-6xl mb-4">👤</div>
           <h2 className="text-2xl font-bold text-white mb-4">
-            Connect Your Wallet
+            Create Your Profile
           </h2>
-          <p className="text-gray-400">
-            Please connect your wallet to view your profile
+          <p className="text-gray-400 mb-8 max-w-md">
+            Create an account or sign in to view your player profile, track your
+            progress, and manage your pet collection
           </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-3 rounded-lg text-white font-bold transition-all"
+            >
+              Create Free Account
+            </button>
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="w-full bg-transparent border-2 border-gray-600 text-gray-300 hover:border-gray-500 hover:text-white px-6 py-3 rounded-lg font-bold transition-all"
+            >
+              Learn More
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -136,6 +156,7 @@ const Profile = () => {
       label: "Total Pets",
       value: profileStats.totalPets || 0,
       description: `${profileStats.hatchedEggs || 0} hatched`,
+      color: "text-blue-400",
     },
     {
       icon: Award,
@@ -147,18 +168,15 @@ const Profile = () => {
         ? profileStats.rarestPet.name
         : "Hatch some eggs!",
       color: profileStats.rarestPet
-        ? `text-${formatTier(profileStats.rarestPet.tier).color}`
+        ? formatTier(profileStats.rarestPet.tier).textColor
         : "text-gray-400",
     },
     {
       icon: Coins,
-      label: "Wallet Balance",
-      value: isWalletConnected
-        ? formatCurrency(walletBalance, "ETH", 4)
-        : "Connect Wallet",
-      description: isWalletConnected
-        ? `${formatCurrency(tokenBalance, "coins")} tokens`
-        : "Connect to view",
+      label: "Game Coins",
+      value: formatCurrency(user?.coins || 0, "coins"),
+      description: `${user?.freeRolls || 0} free rolls available`,
+      color: "text-yellow-400",
     },
     {
       icon: Zap,
@@ -169,20 +187,34 @@ const Profile = () => {
       description: `Avg: ${
         profileStats.averagePower ? formatNumber(profileStats.averagePower) : 0
       }`,
+      color: "text-purple-400",
     },
     {
       icon: Users,
       label: "Battle Team",
       value: `${profileStats.battleTeamSize || 0}/3`,
       description: battleTeam.length === 3 ? "Team Complete" : "Add more pets",
+      color: "text-green-400",
     },
     {
       icon: Sparkles,
       label: "Egg Inventory",
       value: profileStats.totalEggs || 0,
       description: `${profileStats.unhatchedEggs || 0} ready to hatch`,
+      color: "text-pink-400",
     },
   ];
+
+  // Add wallet stats if connected
+  if (hasWallet) {
+    stats.splice(2, 0, {
+      icon: Shield,
+      label: "Wallet Balance",
+      value: formatCurrency(walletBalance, "ETH", 4),
+      description: `${formatCurrency(tokenBalance, "coins")} tokens`,
+      color: "text-green-400",
+    });
+  }
 
   const getTierDistribution = () => {
     if (!profileStats.tierCounts) return [];
@@ -197,6 +229,45 @@ const Profile = () => {
       }));
   };
 
+  const getAccountTypeInfo = () => {
+    if (user.isGuest) {
+      return {
+        type: "Guest Account",
+        description: "Temporary account - progress saved for 24 hours",
+        icon: GamepadIcon,
+        color: "from-gray-500 to-gray-700",
+        action: "Create permanent account to save progress forever",
+      };
+    } else if (user.authMethod === "email") {
+      return {
+        type: "Email Account",
+        description: "Permanent account with email authentication",
+        icon: Mail,
+        color: "from-blue-500 to-purple-600",
+        action: hasWallet ? "Wallet connected" : "Connect wallet for trading",
+      };
+    } else if (user.authMethod === "wallet") {
+      return {
+        type: "Wallet Account",
+        description: "Blockchain-native account",
+        icon: Shield,
+        color: "from-green-500 to-emerald-600",
+        action: "Full blockchain features enabled",
+      };
+    } else {
+      return {
+        type: "Verified Account",
+        description: "Full-featured account",
+        icon: User,
+        color: "from-purple-500 to-pink-600",
+        action: "All features available",
+      };
+    }
+  };
+
+  const accountInfo = getAccountTypeInfo();
+  const AccountIcon = accountInfo.icon;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
       <div className="container mx-auto px-4 py-8">
@@ -205,8 +276,10 @@ const Profile = () => {
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between">
             <div className="flex items-center space-x-6 mb-4 lg:mb-0">
               <div className="relative">
-                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-2xl text-white">
-                  {user.username?.charAt(0).toUpperCase() || "P"}
+                <div
+                  className={`w-20 h-20 bg-gradient-to-r ${accountInfo.color} rounded-full flex items-center justify-center text-2xl text-white`}
+                >
+                  <AccountIcon className="w-8 h-8" />
                 </div>
                 {user.level && (
                   <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">
@@ -219,24 +292,33 @@ const Profile = () => {
                   <h1 className="text-3xl font-bold text-white">
                     {user.username || "Anonymous Player"}
                   </h1>
-                  {user.isGuest && (
-                    <span className="bg-gray-600 text-gray-300 text-xs px-2 py-1 rounded-full">
-                      Guest
-                    </span>
-                  )}
+                  <span
+                    className={`bg-gradient-to-r ${accountInfo.color} text-white text-xs px-3 py-1 rounded-full`}
+                  >
+                    {accountInfo.type}
+                  </span>
                 </div>
-                <p className="text-gray-400 font-mono text-sm">
-                  {user.walletAddress
-                    ? `${user.walletAddress.slice(
-                        0,
-                        8
-                      )}...${user.walletAddress.slice(-6)}`
-                    : "No wallet connected"}
-                </p>
+                <p className="text-gray-400 mb-2">{accountInfo.description}</p>
+                {user.walletAddress ? (
+                  <p className="text-gray-400 font-mono text-sm">
+                    {`${user.walletAddress.slice(
+                      0,
+                      8
+                    )}...${user.walletAddress.slice(-6)}`}
+                  </p>
+                ) : user.email ? (
+                  <p className="text-gray-400 text-sm">{user.email}</p>
+                ) : (
+                  <p className="text-gray-500 text-sm">
+                    No email or wallet connected
+                  </p>
+                )}
+
+                {/* Experience Bar */}
                 {user.experience !== undefined && (
-                  <div className="mt-2">
+                  <div className="mt-3 max-w-md">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>Experience</span>
+                      <span>Level {user.level || 1} Progress</span>
                       <span>
                         {formatNumber(user.experience)} /{" "}
                         {formatNumber(Math.pow(user.level || 1, 2) * 100)}
@@ -244,7 +326,7 @@ const Profile = () => {
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2">
                       <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
                         style={{
                           width: `${Math.min(
                             (user.experience /
@@ -260,50 +342,70 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              {user.coins !== undefined && (
-                <div className="flex items-center space-x-2 bg-yellow-500 bg-opacity-20 px-4 py-2 rounded-lg">
-                  <Coins className="w-5 h-5 text-yellow-400" />
-                  <span className="text-white font-bold">
-                    {formatNumber(user.coins)}
-                  </span>
-                </div>
-              )}
+            <div className="flex flex-col space-y-3">
+              {/* Account Action */}
+              <div className="text-center lg:text-right">
+                <p className="text-gray-400 text-sm mb-2">
+                  {accountInfo.action}
+                </p>
+                {user.isGuest && (
+                  <button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all">
+                    Upgrade to Permanent Account
+                  </button>
+                )}
+                {!hasWallet && !user.isGuest && (
+                  <button
+                    onClick={connectWallet}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2"
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>Connect Wallet</span>
+                  </button>
+                )}
+              </div>
 
-              {user.freeRolls !== undefined && (
-                <div className="flex items-center space-x-2 bg-green-500 bg-opacity-20 px-4 py-2 rounded-lg">
-                  <Sparkles className="w-5 h-5 text-green-400" />
-                  <span className="text-white font-bold">
-                    {user.freeRolls} Free Rolls
-                  </span>
-                </div>
-              )}
+              {/* Quick Stats */}
+              <div className="flex items-center space-x-4">
+                {user.coins !== undefined && (
+                  <div className="flex items-center space-x-2 bg-yellow-500 bg-opacity-20 px-4 py-2 rounded-lg">
+                    <Coins className="w-5 h-5 text-yellow-400" />
+                    <span className="text-white font-bold">
+                      {formatNumber(user.coins)}
+                    </span>
+                  </div>
+                )}
+
+                {user.freeRolls !== undefined && (
+                  <div className="flex items-center space-x-2 bg-green-500 bg-opacity-20 px-4 py-2 rounded-lg">
+                    <Sparkles className="w-5 h-5 text-green-400" />
+                    <span className="text-white font-bold">
+                      {user.freeRolls} Free
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
           {stats.map((stat, index) => {
             const Icon = stat.icon;
             return (
               <div
                 key={index}
-                className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors group"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-500 bg-opacity-20 rounded-lg flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-blue-400" />
+                  <div className="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Icon className="w-6 h-6 text-blue-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div
-                      className={`text-lg font-bold text-white truncate ${
-                        stat.color || ""
-                      }`}
-                    >
+                    <div className={`text-lg font-bold truncate ${stat.color}`}>
                       {stat.value}
                     </div>
-                    <div className="text-gray-400 text-xs truncate">
+                    <div className="text-gray-400 text-sm truncate">
                       {stat.label}
                     </div>
                     {stat.description && (
@@ -322,22 +424,28 @@ const Profile = () => {
           {/* Tier Distribution */}
           {getTierDistribution().length > 0 && (
             <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 lg:col-span-1">
-              <h3 className="text-xl font-bold text-white mb-4">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                <Award className="w-5 h-5 mr-2 text-yellow-400" />
                 Collection Rarity
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {getTierDistribution().map(
                   ({ tier, count, percentage, color, emoji, name }) => (
                     <div
                       key={tier}
                       className="flex items-center justify-between"
                     >
-                      <div className="flex items-center space-x-2">
-                        <span className="text-lg">{emoji}</span>
-                        <span className="text-white text-sm">{name}</span>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-xl">{emoji}</span>
+                        <div>
+                          <div className="text-white font-medium">{name}</div>
+                          <div className="text-gray-400 text-xs">
+                            {percentage}% of collection
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center space-x-3">
-                        <div className="w-20 bg-gray-700 rounded-full h-2">
+                        <div className="w-16 bg-gray-700 rounded-full h-2">
                           <div
                             className="h-2 rounded-full transition-all duration-500"
                             style={{
@@ -346,7 +454,7 @@ const Profile = () => {
                             }}
                           ></div>
                         </div>
-                        <span className="text-gray-400 text-sm w-8 text-right">
+                        <span className="text-white font-bold w-6 text-right">
                           {count}
                         </span>
                       </div>
@@ -359,48 +467,85 @@ const Profile = () => {
 
           {/* Battle Team */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white">Battle Team</h3>
-              <span className="text-gray-400 text-sm">
-                {battleTeam.length}/3 pets selected
-              </span>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white flex items-center">
+                <Trophy className="w-5 h-5 mr-2 text-yellow-400" />
+                Battle Team
+              </h3>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-400 text-sm">
+                  {battleTeam.length}/3 pets selected
+                </span>
+                {battleTeam.length > 0 && (
+                  <button
+                    onClick={() => (window.location.href = "/battle")}
+                    className="bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 px-3 py-1 rounded text-white text-sm transition-all"
+                  >
+                    Go Battle
+                  </button>
+                )}
+              </div>
             </div>
 
             {battleTeam.length === 0 ? (
               <div className="text-center py-8">
-                <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No pets in battle team</p>
-                <p className="text-gray-500 text-sm mt-1">
-                  Select pets from your collection to build your team
+                <Trophy className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 text-lg mb-2">No Battle Team</p>
+                <p className="text-gray-500 text-sm mb-4">
+                  Build your team to start battling other players
                 </p>
+                <button
+                  onClick={() => (window.location.href = "/battle")}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-2 rounded-lg text-white font-medium transition-all"
+                >
+                  Build Battle Team
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {battleTeam.map((pet, index) => (
-                  <div key={pet.id} className="bg-gray-700 rounded-lg p-4">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <span className="text-sm">🐾</span>
+                  <div
+                    key={pet.id}
+                    className="bg-gray-700 rounded-lg p-4 border border-gray-600 hover:border-gray-500 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div
+                        className={`w-12 h-12 rounded-lg ${
+                          formatTier(pet.tier).bgColor
+                        } flex items-center justify-center`}
+                      >
+                        <span className="text-xl">
+                          {formatType(pet.type).emoji}
+                        </span>
                       </div>
                       <div>
-                        <div className="text-white font-medium text-sm">
-                          {pet.name}
-                        </div>
-                        <div className="text-gray-400 text-xs capitalize">
+                        <div className="text-white font-bold">{pet.name}</div>
+                        <div className="text-gray-400 text-sm capitalize">
                           Lvl {pet.level} • {formatType(pet.type).name}
                         </div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-1 text-xs">
-                      <div className="text-center bg-gray-600 rounded p-1">
-                        <div className="text-red-400">ATK</div>
-                        <div className="text-white">{pet.stats.attack}</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="text-center bg-gray-600 rounded p-2">
+                        <div className="text-red-400 font-bold">
+                          {pet.stats.attack}
+                        </div>
+                        <div className="text-gray-400 text-xs">ATK</div>
                       </div>
-                      <div className="text-center bg-gray-600 rounded p-1">
-                        <div className="text-blue-400">DEF</div>
-                        <div className="text-white">{pet.stats.defense}</div>
+                      <div className="text-center bg-gray-600 rounded p-2">
+                        <div className="text-blue-400 font-bold">
+                          {pet.stats.defense}
+                        </div>
+                        <div className="text-gray-400 text-xs">DEF</div>
                       </div>
                     </div>
+                    {pet.abilities?.[0] && (
+                      <div className="mt-2 text-center">
+                        <span className="text-purple-400 text-xs bg-purple-500 bg-opacity-20 px-2 py-1 rounded">
+                          {pet.abilities[0]}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -411,14 +556,19 @@ const Profile = () => {
         {/* Pet Collection */}
         <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">
+            <h2 className="text-2xl font-bold text-white flex items-center">
+              <Sparkles className="w-6 h-6 mr-2 text-yellow-400" />
               Your Pet Collection
             </h2>
             <div className="flex items-center space-x-4">
               <span className="text-gray-400 text-sm">
-                {pets.length} pets • Last sync:{" "}
-                {lastSync ? new Date(lastSync).toLocaleTimeString() : "Never"}
+                {pets.length} pets total
               </span>
+              {lastSync && (
+                <span className="text-gray-500 text-sm">
+                  Last sync: {new Date(lastSync).toLocaleTimeString()}
+                </span>
+              )}
             </div>
           </div>
 
@@ -426,16 +576,23 @@ const Profile = () => {
             <div className="text-center py-12">
               <div className="text-6xl mb-4">🐾</div>
               <h3 className="text-xl font-bold text-white mb-2">No Pets Yet</h3>
-              <p className="text-gray-400 mb-4">
-                Start hatching eggs to build your collection!
+              <p className="text-gray-400 mb-6">
+                Start your adventure by hatching some eggs!
               </p>
-              <a
-                href="/hatchery"
-                className="inline-flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-6 py-3 rounded-lg text-white font-medium transition-all"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Visit Hatchery</span>
-              </a>
+              <div className="space-y-3">
+                <button
+                  onClick={() => (window.location.href = "/hatchery")}
+                  className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-3 rounded-lg text-white font-bold transition-all flex items-center space-x-2 mx-auto"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <span>Visit Hatchery</span>
+                </button>
+                {user.isGuest && (
+                  <p className="text-gray-500 text-sm">
+                    🕒 Guest accounts save progress for 24 hours
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

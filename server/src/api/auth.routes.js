@@ -1,37 +1,20 @@
 import express from "express";
 import { AuthController } from "../controllers/AuthController.js";
-import { validate } from "../utils/validators.js";
-import {
-  userRegistrationSchema,
-  userLoginSchema,
-} from "../utils/validators.js";
-import { authLimiter } from "../middleware/rateLimiter.js";
-import { authenticate, optionalAuth } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // Public routes
-router.post(
-  "/register",
-  authLimiter,
-  validate(userRegistrationSchema),
-  AuthController.register
-);
-
-router.post(
-  "/login",
-  authLimiter,
-  validate(userLoginSchema),
-  AuthController.walletLogin
-);
-
-router.post("/guest", authLimiter, AuthController.guestLogin);
+router.post("/register", AuthController.register);
+router.post("/login", AuthController.login);
+router.post("/wallet/register", AuthController.walletRegister);
+router.post("/wallet/login", AuthController.walletLogin);
+router.post("/guest", AuthController.guestLogin);
 
 // Protected routes
-router.get("/profile", authenticate, AuthController.getProfile);
-
-router.put("/profile", authenticate, AuthController.updateProfile);
-
-router.post("/refresh", optionalAuth, AuthController.refreshToken);
+router.get("/profile", authMiddleware, AuthController.getProfile);
+router.put("/profile", authMiddleware, AuthController.updateProfile);
+router.post("/wallet/connect", authMiddleware, AuthController.connectWallet);
+router.post("/refresh", authMiddleware, AuthController.refreshToken);
 
 export default router;

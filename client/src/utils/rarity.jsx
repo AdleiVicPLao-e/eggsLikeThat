@@ -101,3 +101,25 @@ export const getHatchProbability = (eggType, tier) => {
 
   return probabilities[eggType]?.[tier] || 0;
 };
+
+export function getRarityColor(rarity) {
+  const colors = {
+    COMMON: "#9e9e9e",
+    UNCOMMON: "#4caf50",
+    RARE: "#2196f3",
+    EPIC: "#9c27b0",
+    LEGENDARY: "#ff9800",
+  };
+  return colors[rarity] || "#9e9e9e";
+}
+
+export function getRarityBgColor(rarity) {
+  const colors = {
+    COMMON: "#f5f5f5",
+    UNCOMMON: "#e8f5e9",
+    RARE: "#e3f2fd",
+    EPIC: "#f3e5f5",
+    LEGENDARY: "#fff3e0",
+  };
+  return colors[rarity] || "#f5f5f5";
+}

@@ -15,22 +15,53 @@ export const useGame = () => {
 
 export const GameProvider = ({ children }) => {
   const { user, updateUser } = useUser();
-  const { getUserPets, getUserEggs } = useGameAPI();
-  const { getOwnedPets } = useBlockchain();
 
+  // Local state
   const [pets, setPets] = useState([]);
   const [eggs, setEggs] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
+  const [battleTeam, setBattleTeam] = useState([]);
 
-  // Load game data when user changes
+  // Define syncBlockchainData first so we can inject it into useBlockchain
+  const syncBlockchainData = useCallback(async () => {
+    if (!user?.walletAddress) return;
+    try {
+      const blockchainPets = await blockchain.getOwnedPets(user.walletAddress);
+      if (blockchainPets.success) {
+        console.log("Synced blockchain pets:", blockchainPets.pets);
+      }
+      setLastSync(new Date().toISOString());
+    } catch (error) {
+      console.error("Error syncing blockchain data:", error);
+    }
+  }, [user?.walletAddress]);
+
+  // Initialize blockchain hook AFTER defining syncBlockchainData
+  const blockchain = useBlockchain({
+    syncBlockchainData,
+    updateUser,
+  });
+
+  const { getOwnedPets } = blockchain;
+
+  // Attach API handlers
+  const { getUserPets, getUserEggs, hatchEgg, feedPet, claimDailyReward } =
+    useGameAPI({
+      updateUser,
+      updatePets: setPets,
+      updateEggs: setEggs,
+      updateInventory: setInventory,
+    });
+
   React.useEffect(() => {
     if (user?.id) {
       loadGameData();
     } else {
-      // Clear game data when user logs out
       setPets([]);
       setEggs([]);
+      setInventory([]);
     }
   }, [user?.id]);
 
@@ -43,15 +74,8 @@ export const GameProvider = ({ children }) => {
         getUserPets(),
         getUserEggs(),
       ]);
-
-      if (petsData?.data?.pets) {
-        setPets(petsData.data.pets);
-      }
-
-      if (eggsData?.data?.eggs) {
-        setEggs(eggsData.data.eggs);
-      }
-
+      if (petsData?.data?.pets) setPets(petsData.data.pets);
+      if (eggsData?.data?.eggs) setEggs(eggsData.data.eggs);
       setLastSync(new Date().toISOString());
     } catch (error) {
       console.error("Error loading game data:", error);
@@ -60,37 +84,18 @@ export const GameProvider = ({ children }) => {
     }
   };
 
-  const syncBlockchainData = useCallback(async () => {
-    if (!user?.walletAddress) return;
-
-    try {
-      // Sync blockchain-owned pets
-      const blockchainPets = await getOwnedPets(user.walletAddress);
-      if (blockchainPets.success) {
-        // Merge blockchain pets with server pets
-        // This would need more sophisticated merging logic
-        console.log("Synced blockchain pets:", blockchainPets.pets);
-      }
-
-      setLastSync(new Date().toISOString());
-    } catch (error) {
-      console.error("Error syncing blockchain data:", error);
-    }
-  }, [user?.walletAddress, getOwnedPets]);
-
-  // Pet management
+  // ---------------------------
+  // 🐾 Pet Management
+  // ---------------------------
   const addPet = useCallback((newPet) => {
     setPets((prev) => {
-      const existingIndex = prev.findIndex((pet) => pet.id === newPet.id);
+      const existingIndex = prev.findIndex((p) => p.id === newPet.id);
       if (existingIndex >= 0) {
-        // Update existing pet
         const updated = [...prev];
         updated[existingIndex] = newPet;
         return updated;
-      } else {
-        // Add new pet
-        return [...prev, newPet];
       }
+      return [...prev, newPet];
     });
   }, []);
 
@@ -105,37 +110,32 @@ export const GameProvider = ({ children }) => {
   }, []);
 
   const getPet = useCallback(
-    (petId) => {
-      return pets.find((pet) => pet.id === petId);
-    },
+    (petId) => pets.find((pet) => pet.id === petId),
     [pets]
   );
 
   const getPetsByTier = useCallback(
-    (tier) => {
-      return pets.filter((pet) => pet.tier === tier);
-    },
+    (tier) => pets.filter((pet) => pet.tier === tier),
     [pets]
   );
 
   const getPetsByType = useCallback(
-    (type) => {
-      return pets.filter((pet) => pet.type === type);
-    },
+    (type) => pets.filter((pet) => pet.type === type),
     [pets]
   );
 
-  // Egg management
+  // ---------------------------
+  // 🥚 Egg Management
+  // ---------------------------
   const addEgg = useCallback((newEgg) => {
     setEggs((prev) => {
-      const existingIndex = prev.findIndex((egg) => egg.id === newEgg.id);
+      const existingIndex = prev.findIndex((e) => e.id === newEgg.id);
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = newEgg;
         return updated;
-      } else {
-        return [...prev, newEgg];
       }
+      return [...prev, newEgg];
     });
   }, []);
 
@@ -150,17 +150,16 @@ export const GameProvider = ({ children }) => {
   }, []);
 
   const getEgg = useCallback(
-    (eggId) => {
-      return eggs.find((egg) => egg.id === eggId);
-    },
+    (eggId) => eggs.find((egg) => egg.id === eggId),
     [eggs]
   );
 
-  // Game state management
+  // ---------------------------
+  // 💰 User Progression
+  // ---------------------------
   const updateCoins = useCallback(
     (amount) => {
       if (!user) return;
-
       const newCoins = Math.max(0, (user.coins || 0) + amount);
       updateUser({ coins: newCoins });
     },
@@ -174,7 +173,6 @@ export const GameProvider = ({ children }) => {
       const newExperience = (user.experience || 0) + amount;
       updateUser({ experience: newExperience });
 
-      // Check for level up
       const expNeeded = Math.pow(user.level || 1, 2) * 100;
       if (newExperience >= expNeeded) {
         const newLevel = (user.level || 1) + 1;
@@ -193,71 +191,64 @@ export const GameProvider = ({ children }) => {
   const updateFreeRolls = useCallback(
     (amount) => {
       if (!user) return;
-
       const newFreeRolls = Math.max(0, (user.freeRolls || 0) + amount);
       updateUser({ freeRolls: newFreeRolls });
     },
     [user, updateUser]
   );
 
-  // Battle team management
-  const [battleTeam, setBattleTeam] = useState([]);
-
+  // ---------------------------
+  // ⚔️ Battle Team
+  // ---------------------------
   const addToBattleTeam = useCallback(
     (petId) => {
       const pet = getPet(petId);
       if (!pet || battleTeam.length >= 3) return;
-
       setBattleTeam((prev) => [...prev, pet]);
     },
-    [getPet, battleTeam.length]
+    [getPet, battleTeam]
   );
 
   const removeFromBattleTeam = useCallback((petId) => {
     setBattleTeam((prev) => prev.filter((pet) => pet.id !== petId));
   }, []);
 
-  const clearBattleTeam = useCallback(() => {
-    setBattleTeam([]);
-  }, []);
+  const clearBattleTeam = useCallback(() => setBattleTeam([]), []);
 
+  // ---------------------------
+  // 💾 Context Value
+  // ---------------------------
   const value = {
-    // State
     pets,
     eggs,
+    inventory,
     battleTeam,
     isLoading,
     lastSync,
 
-    // Pet management
+    // Actions
     addPet,
     updatePet,
     removePet,
     getPet,
     getPetsByTier,
     getPetsByType,
-
-    // Egg management
     addEgg,
     updateEgg,
     removeEgg,
     getEgg,
-
-    // Game progression
     updateCoins,
     updateExperience,
     updateFreeRolls,
-
-    // Battle team
     addToBattleTeam,
     removeFromBattleTeam,
     clearBattleTeam,
-
-    // Data synchronization
     loadGameData,
     syncBlockchainData,
+    hatchEgg,
+    feedPet,
+    claimDailyReward,
 
-    // User proxy (for convenience)
     user,
     updateUser,
   };

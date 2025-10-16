@@ -1,13 +1,17 @@
 import { useState, useCallback } from "react";
 import { blockchainService } from "../services/blockchain.jsx";
-import { useGame } from "../context/GameContext.jsx";
 
-export const useBlockchain = () => {
+/**
+ * useBlockchain hook
+ *
+ * Pass `syncBlockchainData` (and optionally `updateUser`)
+ * from GameContext when using this hook inside GameProvider.
+ */
+export const useBlockchain = ({ syncBlockchainData, updateUser } = {}) => {
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [transactionError, setTransactionError] = useState(null);
   const [transactionSuccess, setTransactionSuccess] = useState(null);
   const [pendingTransactions, setPendingTransactions] = useState([]);
-  const { updateUser, syncBlockchainData } = useGame();
 
   const executeTransaction = useCallback(
     async (transactionCall, ...args) => {
@@ -23,10 +27,8 @@ export const useBlockchain = () => {
 
         if (result.success) {
           setTransactionSuccess("Transaction completed successfully!");
-
-          // Sync data after successful transaction
-          await syncBlockchainData();
-
+          // Sync data only if callback provided
+          if (syncBlockchainData) await syncBlockchainData();
           return result;
         } else {
           throw new Error(result.error);
@@ -45,7 +47,7 @@ export const useBlockchain = () => {
     [syncBlockchainData]
   );
 
-  // Pet NFT methods
+  // --- Blockchain actions below (unchanged) ---
   const mintPet = useCallback(
     (petData) =>
       executeTransaction(
@@ -73,7 +75,6 @@ export const useBlockchain = () => {
     [executeTransaction]
   );
 
-  // Egg methods
   const purchaseEgg = useCallback(
     (eggType, amount) =>
       executeTransaction(
@@ -93,7 +94,6 @@ export const useBlockchain = () => {
     [executeTransaction]
   );
 
-  // Marketplace methods
   const listPet = useCallback(
     (tokenId, price, isERC1155 = false, amount = 1) =>
       executeTransaction(
@@ -116,7 +116,6 @@ export const useBlockchain = () => {
     [executeTransaction]
   );
 
-  // Fusion methods
   const startFusion = useCallback(
     (inputTokenIds, targetTier) =>
       executeTransaction(
@@ -137,7 +136,6 @@ export const useBlockchain = () => {
     [executeTransaction]
   );
 
-  // Utility methods
   const getBalance = useCallback(async (address) => {
     try {
       const balance = await blockchainService.getBalance(address);
@@ -156,32 +154,11 @@ export const useBlockchain = () => {
     }
   }, []);
 
-  // Event listeners setup
   const setupEventListeners = useCallback(() => {
-    blockchainService.onPetMinted(
-      (tokenId, owner, tier, petType, attack, defense, speed, health) => {
-        console.log("Pet minted:", { tokenId, owner, tier, petType });
-        // Update local state or trigger refresh
-        syncBlockchainData();
-      }
-    );
-
-    blockchainService.onEggHatched((owner, eggType, petTokenId) => {
-      console.log("Egg hatched:", { owner, eggType, petTokenId });
-      syncBlockchainData();
-    });
-
-    blockchainService.onItemListed(
-      (seller, tokenId, price, isERC1155, amount) => {
-        console.log("Item listed:", { seller, tokenId, price });
-        syncBlockchainData();
-      }
-    );
-
-    blockchainService.onItemSold((seller, buyer, tokenId, price) => {
-      console.log("Item sold:", { seller, buyer, tokenId, price });
-      syncBlockchainData();
-    });
+    blockchainService.onPetMinted(() => syncBlockchainData?.());
+    blockchainService.onEggHatched(() => syncBlockchainData?.());
+    blockchainService.onItemListed(() => syncBlockchainData?.());
+    blockchainService.onItemSold(() => syncBlockchainData?.());
   }, [syncBlockchainData]);
 
   const removeEventListeners = useCallback(() => {
@@ -208,40 +185,25 @@ export const useBlockchain = () => {
   ]);
 
   return {
-    // Transaction state
     transactionLoading,
     transactionError,
     transactionSuccess,
     pendingTransactions,
     getTransactionStatus,
-
-    // Actions
     clearMessages,
     setupEventListeners,
     removeEventListeners,
-
-    // Pet NFT methods
     mintPet,
     getPetMetadata,
     getOwnedPets,
-
-    // Egg methods
     purchaseEgg,
     hatchEgg,
-
-    // Marketplace methods
     listPet,
     purchaseListing,
-
-    // Fusion methods
     startFusion,
     calculateFusionSuccess,
-
-    // Utility methods
     getBalance,
     getTokenBalance,
-
-    // Direct service access
     service: blockchainService,
   };
 };

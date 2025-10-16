@@ -1,10 +1,18 @@
-import { verifyToken } from "../utils/cryptoUtils.js";
+import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import logger from "../utils/logger.js";
+import { config } from "../config/env.js";
 
-export const authenticate = async (req, res, next) => {
+export const authMiddleware = async (req, res, next) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    let token;
+
+    // Check for token in header
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    }
 
     if (!token) {
       return res.status(401).json({
@@ -13,50 +21,33 @@ export const authenticate = async (req, res, next) => {
       });
     }
 
-    const decoded = verifyToken(token);
-    const user = await User.findById(decoded.userId).select("-__v");
+    // Verify token
+    const decoded = jwt.verify(token, config.JWT_SECRET);
 
+    // Get user from database
+    const user = await User.findById(decoded.userId).select("-password");
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid token. User not found.",
+        message: "User not found",
+      });
+    }
+
+    // Check if guest token expired
+    if (user.isGuest && decoded.exp * 1000 < Date.now()) {
+      return res.status(401).json({
+        success: false,
+        message: "Guest session expired",
       });
     }
 
     req.user = user;
     next();
   } catch (error) {
-    logger.error("Authentication error:", error);
-    return res.status(401).json({
+    console.error("Auth middleware error:", error);
+    res.status(401).json({
       success: false,
-      message: "Invalid token.",
+      message: "Invalid token",
     });
   }
-};
-
-export const optionalAuth = async (req, res, next) => {
-  try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
-
-    if (token) {
-      const decoded = verifyToken(token);
-      const user = await User.findById(decoded.userId).select("-__v");
-      req.user = user;
-    }
-
-    next();
-  } catch (error) {
-    // Continue without authentication for optional routes
-    next();
-  }
-};
-
-export const requireWallet = (req, res, next) => {
-  if (!req.user?.walletAddress) {
-    return res.status(403).json({
-      success: false,
-      message: "Wallet connection required for this action",
-    });
-  }
-  next();
 };

@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useGameAPI } from "../hooks/useGameAPI.jsx";
-import { LOCAL_STORAGE_KEYS } from "../utils/constants.jsx";
 
 const UserContext = createContext();
 
@@ -15,103 +13,167 @@ export const useUser = () => {
 export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { getProfile } = useGameAPI();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState("login"); // 'login' or 'register'
 
-  // Load user from localStorage on mount
+  // Check for existing session on app load
   useEffect(() => {
-    loadUserFromStorage();
+    const checkExistingSession = async () => {
+      setIsLoading(true);
+      try {
+        const savedUser = localStorage.getItem("gameUser");
+        const sessionToken = localStorage.getItem("sessionToken");
+
+        if (savedUser && sessionToken) {
+          // Verify session with backend
+          const response = await fetch("/api/auth/verify", {
+            headers: {
+              Authorization: `Bearer ${sessionToken}`,
+            },
+          });
+
+          if (response.ok) {
+            setUser(JSON.parse(savedUser));
+          } else {
+            // Invalid session, clear storage
+            localStorage.removeItem("gameUser");
+            localStorage.removeItem("sessionToken");
+          }
+        }
+      } catch (error) {
+        console.error("Session check failed:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkExistingSession();
   }, []);
 
-  const loadUserFromStorage = async () => {
+  // Register new user
+  const register = async (userData) => {
     try {
-      const savedUser = localStorage.getItem(LOCAL_STORAGE_KEYS.USER_SESSION);
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        setUser(userData);
+      setIsLoading(true);
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userData),
+      });
 
-        // Verify user session is still valid
-        if (userData.token) {
-          await verifySession(userData.token);
-        }
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Registration failed");
       }
+
+      const { user: newUser, token } = await response.json();
+
+      // Store user data and token
+      localStorage.setItem("gameUser", JSON.stringify(newUser));
+      localStorage.setItem("sessionToken", token);
+
+      setUser(newUser);
+      setShowAuthModal(false);
+
+      return { success: true, user: newUser };
     } catch (error) {
-      console.error("Error loading user from storage:", error);
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.USER_SESSION);
+      return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const verifySession = async (token) => {
+  // Login existing user
+  const login = async (credentials) => {
     try {
-      // This would typically verify with backend
-      // For now, we'll assume it's valid and refresh profile
-      await getProfile();
+      setIsLoading(true);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Login failed");
+      }
+
+      const { user: userData, token } = await response.json();
+
+      // Store user data and token
+      localStorage.setItem("gameUser", JSON.stringify(userData));
+      localStorage.setItem("sessionToken", token);
+
+      setUser(userData);
+      setShowAuthModal(false);
+
+      return { success: true, user: userData };
     } catch (error) {
-      console.error("Session verification failed:", error);
-      logout();
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const login = (userData, token) => {
-    const userWithToken = {
-      ...userData,
-      token,
-      loginTime: new Date().toISOString(),
-    };
-
-    setUser(userWithToken);
-    localStorage.setItem(
-      LOCAL_STORAGE_KEYS.USER_SESSION,
-      JSON.stringify(userWithToken)
-    );
-  };
-
+  // Logout
   const logout = () => {
     setUser(null);
-    localStorage.removeItem(LOCAL_STORAGE_KEYS.USER_SESSION);
-    localStorage.removeItem(LOCAL_STORAGE_KEYS.WALLET_CONNECTION);
+    localStorage.removeItem("gameUser");
+    localStorage.removeItem("sessionToken");
+    // Optional: Call backend logout endpoint
   };
 
-  const updateUser = (updates) => {
-    setUser((prev) => {
-      if (!prev) return null;
+  // Connect wallet (optional)
+  const connectWallet = async () => {
+    try {
+      // Mock wallet connection - replace with real implementation
+      const mockWallet = {
+        address: "0x" + Math.random().toString(16).slice(2, 42),
+        balance: "0.5 ETH",
+      };
 
-      const updatedUser = { ...prev, ...updates };
-      localStorage.setItem(
-        LOCAL_STORAGE_KEYS.USER_SESSION,
-        JSON.stringify(updatedUser)
-      );
-      return updatedUser;
-    });
+      const updatedUser = { ...user, wallet: mockWallet };
+      setUser(updatedUser);
+      localStorage.setItem("gameUser", JSON.stringify(updatedUser));
+
+      return { success: true, wallet: mockWallet };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   };
 
-  const isGuest = user?.isGuest || false;
-  const isWalletConnected = !!user?.walletAddress;
+  // Disconnect wallet
+  const disconnectWallet = () => {
+    const updatedUser = { ...user, wallet: null };
+    setUser(updatedUser);
+    localStorage.setItem("gameUser", JSON.stringify(updatedUser));
+  };
 
   const value = {
-    // State
+    // User state
     user,
     isLoading,
 
+    // Authentication state
+    isAuthenticated: !!user,
+    isGuest: user?.isGuest || false,
+    hasWallet: !!user?.wallet,
+
+    // Auth modal
+    showAuthModal,
+    setShowAuthModal,
+    authMode,
+    setAuthMode,
+
     // Actions
+    register,
     login,
     logout,
-    updateUser,
-
-    // Derived state
-    isAuthenticated: !!user,
-    isGuest,
-    isWalletConnected,
-
-    // User properties (convenience accessors)
-    userId: user?.id,
-    username: user?.username,
-    walletAddress: user?.walletAddress,
-    level: user?.level,
-    coins: user?.coins,
-    experience: user?.experience,
-    freeRolls: user?.freeRolls,
+    connectWallet,
+    disconnectWallet,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
