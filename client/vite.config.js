@@ -1,14 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// ✅ allows JSX in both .jsx and .js files
 export default defineConfig({
-  plugins: [react()],
-  esbuild: {
-    loader: "jsx",
-    include: /src\/.*\.[jt]sx?$/,
-    exclude: [],
-  },
+  plugins: [
+    react({
+      jsxRuntime: "automatic", // enables JSX automatically in .js files
+      include: "**/*.{js,jsx,ts,tsx}", // ensure plugin applies to all
+    }),
+  ],
   resolve: {
     alias: {
       "@": "/src",

@@ -1,7 +1,6 @@
-import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import { UserProvider } from "./context/UserContext.js";
-import { GameProvider } from "./context/GameContext.js";
+import { UserProvider } from "./context/UserContext.jsx";
+import { GameProvider } from "./context/GameContext.jsx";
 import Header from "./components/Layout/Header.jsx";
 import Navigation from "./components/Layout/Navigation.jsx";
 import Home from "./pages/Home.jsx";

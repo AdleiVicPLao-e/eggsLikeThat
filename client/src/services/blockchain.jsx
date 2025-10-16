@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESSES, RPC_URLS } from "../utils/constants.js";
+import { CONTRACT_ADDRESSES, RPC_URLS } from "../utils/constants.jsx";
 
 // Contract ABIs (simplified - in real implementation, import from artifacts)
 const PET_NFT_ABI = [

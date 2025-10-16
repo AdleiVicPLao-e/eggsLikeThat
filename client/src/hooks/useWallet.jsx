@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { blockchainService } from "../services/blockchain.js";
-import { useGame } from "../context/GameContext.js";
+import { blockchainService } from "../services/blockchain.jsx";
+import { useGame } from "../context/GameContext.jsx";
 
 export const useWallet = () => {
   const [account, setAccount] = useState(null);

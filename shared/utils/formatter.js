@@ -1,7 +1,7 @@
-const tiers = require("../constants/tiers.json");
-const types = require("../constants/types.json");
+import tiers from "../constants/tiers.json" with { type: "json" };
+import types from "../constants/types.json" with { type: "json" };
 
-class Formatters {
+export class Formatters {
   // Format wallet address for display
   static formatWalletAddress(address, startLength = 6, endLength = 4) {
     if (!address) return "Unknown";
@@ -251,5 +251,4 @@ class Formatters {
     };
   }
 }
-
-module.exports = Formatters;
+export const formatters = new Formatters();

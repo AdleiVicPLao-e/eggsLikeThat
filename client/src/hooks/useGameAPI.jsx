@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { gameAPI, validateData } from "../services/api.js";
-import { useGame } from "../context/GameContext.js";
+import { gameAPI, validateData } from "../services/api.jsx";
+import { useGame } from "../context/GameContext.jsx";
 
 export const useGameAPI = () => {
   const [loading, setLoading] = useState(false);

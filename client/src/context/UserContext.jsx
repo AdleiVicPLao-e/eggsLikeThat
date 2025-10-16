@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { useGameAPI } from "../hooks/useGameAPI.js";
-import { LOCAL_STORAGE_KEYS } from "../utils/constants.js";
+import { useGameAPI } from "../hooks/useGameAPI.jsx";
+import { LOCAL_STORAGE_KEYS } from "../utils/constants.jsx";
 
 const UserContext = createContext();
 

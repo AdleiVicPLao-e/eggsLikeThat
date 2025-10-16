@@ -1,5 +1,5 @@
 import { RNGService } from "pet-game-shared";
-import { TIERS, TYPES, ABILITIES } from "./constants.js";
+import { TIERS, TYPES, ABILITIES } from "./constants.jsx";
 
 // Create RNG instance with optional seed for deterministic results
 export const rng = new RNGService();

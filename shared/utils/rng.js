@@ -1,15 +1,12 @@
-const tiers = require("../constants/tiers.json");
-const types = require("../constants/types.json");
-const abilities = require("../constants/abilities.json");
+import tiers from "../constants/tiers.json" with { type: "json" };
+import types from "../constants/types.json" with { type: "json" };
+import abilities from "../constants/abilities.json" with { type: "json" };
 
-class RNGService {
+export class RNGService {
   constructor(seed = null) {
     this.seed = seed;
-    if (seed) {
-      this.rng = this.seededRandom(seed);
-    } else {
-      this.rng = Math.random;
-    }
+    if (seed) this.rng = this.seededRandom(seed);
+    else this.rng = Math.random;
   }
 
   // Seeded random number generator for deterministic results
@@ -254,11 +251,4 @@ class RNGService {
   }
 }
 
-// Create default instance
-const defaultRNG = new RNGService();
-
-// Export both class and default instance
-module.exports = {
-  RNGService,
-  rng: defaultRNG,
-};
+export const rng = new RNGService();

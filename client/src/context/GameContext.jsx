@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
-import { useGameAPI } from "../hooks/useGameAPI.js";
-import { useBlockchain } from "../hooks/useBlockchain.js";
-import { useUser } from "./UserContext.js";
+import { useGameAPI } from "../hooks/useGameAPI.jsx";
+import { useBlockchain } from "../hooks/useBlockchain.jsx";
+import { useUser } from "./UserContext.jsx";
 
 const GameContext = createContext();
 
