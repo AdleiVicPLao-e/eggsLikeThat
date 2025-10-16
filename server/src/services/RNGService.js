@@ -1,8 +1,4 @@
 import { RNGService } from "pet-game-shared/utils/rng.js";
-import { TIERS, TYPES, ABILITIES } from "pet-game-shared/constants/index.js";
-
-// Create RNG instance for server use
-export const rngService = new RNGService();
 
 // Server-specific extensions
 class ServerRNGService extends RNGService {
@@ -17,6 +13,8 @@ class ServerRNGService extends RNGService {
       isFavorite: false,
       battlesWon: 0,
       battlesLost: 0,
+      experience: 0,
+      level: 1,
     };
   }
 
@@ -48,6 +46,43 @@ class ServerRNGService extends RNGService {
       items: this.generateBattleItems(battleResult.winner === "player"),
       achievementProgress: this.calculateAchievementProgress(battleResult),
     };
+  }
+
+  // Get egg drop rates for catalog display
+  getEggDropRates(eggType) {
+    const dropRates = {
+      BASIC: {
+        common: "50%",
+        uncommon: "30%",
+        rare: "15%",
+        epic: "4%",
+        legendary: "1%",
+      },
+      PREMIUM: {
+        common: "30%",
+        uncommon: "40%",
+        rare: "20%",
+        epic: "8%",
+        legendary: "2%",
+      },
+      COSMETIC: {
+        common_skin: "60%",
+        rare_skin: "30%",
+        epic_animation: "8%",
+        legendary_effect: "2%",
+      },
+      MYSTERY: {
+        random: "100%",
+      },
+    };
+
+    return dropRates[eggType] || dropRates.BASIC;
+  }
+
+  // Get random pet type for preview
+  getRandomPetType() {
+    const types = ["Fire", "Water", "Earth", "Air", "Light", "Dark"];
+    return types[Math.floor(Math.random() * types.length)];
   }
 
   // Server-specific helper methods
