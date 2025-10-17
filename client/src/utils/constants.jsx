@@ -1,36 +1,82 @@
-export { TIERS, TYPES, ABILITIES } from "pet-game-shared";
-
-// Client-specific constants
-export const CONTRACT_ADDRESSES = {
-  PET_NFT: import.meta.env.VITE_PET_NFT_ADDRESS || "0x...",
-  EGG_ITEM: import.meta.env.VITE_EGG_ITEM_ADDRESS || "0x...",
-  MARKETPLACE: import.meta.env.VITE_MARKETPLACE_ADDRESS || "0x...",
-  FUSION_SYSTEM: import.meta.env.VITE_FUSION_SYSTEM_ADDRESS || "0x...",
-  GAME_TOKEN: import.meta.env.VITE_GAME_TOKEN_ADDRESS || "0x...",
-};
-
-export const RPC_URLS = {
-  1: "https://mainnet.infura.io/v3/your-project-id",
-  137: "https://polygon-rpc.com",
-  80001: "https://rpc-mumbai.maticvigil.com",
-  31337: "http://localhost:8545",
-};
-
+// client/src/utils/constants.js
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+  process.env.REACT_APP_API_URL || "http://localhost:3001/api";
 
-export const GAME_CONFIG = {
-  DAILY_FREE_ROLLS: 1,
-  FREE_ROLL_COOLDOWN_HOURS: 24,
-  HATCH_COST: 100,
-  FUSION_MIN_PETS: 2,
-  FUSION_MAX_PETS: 5,
-  MAX_PET_LEVEL: 100,
-  BATTLE_MAX_PETS: 3,
+// Game constants
+export const EGG_TYPES = {
+  BASIC: "basic",
+  COSMETIC: "cosmetic",
+  ATTRIBUTE: "attribute",
+  PREMIUM: "premium",
 };
 
-export const LOCAL_STORAGE_KEYS = {
-  USER_SESSION: "petverse_user_session",
-  WALLET_CONNECTION: "petverse_wallet_connected",
-  GAME_SETTINGS: "petverse_game_settings",
+export const PET_RARITIES = {
+  COMMON: "Common",
+  UNCOMMON: "Uncommon",
+  RARE: "Rare",
+  EPIC: "Epic",
+  LEGENDARY: "Legendary",
+  MYTHIC: "Mythic",
+  CELESTIAL: "Celestial",
+  EXOTIC: "Exotic",
+  ULTIMATE: "Ultimate",
+  GODLY: "Godly",
+};
+
+export const BATTLE_MODES = {
+  PVE: "pve",
+  PVP: "pvp",
+};
+
+export const OPPONENT_DIFFICULTIES = {
+  EASY: "easy",
+  MEDIUM: "medium",
+  HARD: "hard",
+  EPIC: "epic",
+};
+
+export const CURRENCIES = {
+  COINS: "coins",
+  ETH: "ETH",
+  MATIC: "MATIC",
+};
+
+export const TRADE_STATUS = {
+  LISTED: "listed",
+  SOLD: "sold",
+  CANCELLED: "cancelled",
+};
+
+export const OFFER_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+  COUNTERED: "countered",
+  CANCELLED: "cancelled",
+  EXPIRED: "expired",
+};
+
+// Local storage keys
+export const STORAGE_KEYS = {
+  TOKEN: "petverse_token",
+  USER: "petverse_user",
+  THEME: "petverse_theme",
+  LANGUAGE: "petverse_language",
+};
+
+// Default pagination
+export const DEFAULT_PAGINATION = {
+  PAGE: 1,
+  LIMIT: 20,
+};
+
+// API timeout in milliseconds
+export const API_TIMEOUT = 30000;
+
+// Cache TTL in milliseconds
+export const CACHE_TTL = {
+  USER: 60000,
+  PETS: 120000,
+  MARKETPLACE: 30000,
+  EGGS: 180000,
 };

@@ -8,39 +8,54 @@ export const EggController = {
   async getUserEggs(req, res) {
     try {
       const { page = 1, limit = 20, eggType, isHatched } = req.query;
-      const user = req.user;
+      const user = await User.findById(req.user._id);
 
-      const query = { owner: user._id };
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Get eggs from user's egg array
+      let eggs = user.eggs || [];
 
       // Apply filters
-      if (eggType) query.eggType = eggType;
-      if (isHatched !== undefined) query.isHatched = isHatched === "true";
+      if (eggType) {
+        eggs = eggs.filter((egg) => egg.type === eggType);
+      }
+      if (isHatched !== undefined) {
+        const hatchedFilter = isHatched === "true";
+        eggs = eggs.filter((egg) => egg.isHatched === hatchedFilter);
+      }
 
-      const eggs = await Egg.find(query)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .select("-__v")
-        .lean();
-
-      const total = await Egg.countDocuments(query);
+      // Paginate results
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedEggs = eggs.slice(startIndex, endIndex);
 
       // Calculate egg statistics
-      const stats = await this.getEggStats(user._id);
+      const stats = this.getEggStats(user.eggs);
 
       res.json({
         success: true,
         data: {
-          eggs: eggs.map((egg) => ({
-            ...egg,
+          eggs: paginatedEggs.map((egg) => ({
+            id: egg.id,
+            type: egg.type,
+            isHatched: egg.isHatched,
+            contents: egg.contents,
+            rarity: egg.rarity,
             canHatch: !egg.isHatched,
-            timeUntilHatch: this.calculateHatchTime(egg.createdAt),
+            timeUntilHatch: this.calculateHatchTime(
+              egg.obtainedAt || egg.createdAt
+            ),
           })),
           pagination: {
             page: parseInt(page),
             limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / limit),
+            total: eggs.length,
+            pages: Math.ceil(eggs.length / limit),
           },
           stats,
         },
@@ -58,12 +73,16 @@ export const EggController = {
   async getEggDetails(req, res) {
     try {
       const { eggId } = req.params;
-      const user = req.user;
+      const user = await User.findById(req.user._id);
 
-      const egg = await Egg.findOne({ _id: eggId, owner: user._id })
-        .populate("owner", "username level")
-        .lean();
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
+      const egg = user.eggs.find((e) => e.id === eggId);
       if (!egg) {
         return res.status(404).json({
           success: false,
@@ -76,8 +95,10 @@ export const EggController = {
         ...egg,
         canHatch: !egg.isHatched,
         hatchRequirements: this.getHatchRequirements(egg),
-        potentialPetsInfo: this.getPotentialPetsInfo(egg.potentialPets),
-        timeUntilHatch: this.calculateHatchTime(egg.createdAt),
+        potentialContents: this.getPotentialContents(egg.type),
+        timeUntilHatch: this.calculateHatchTime(
+          egg.obtainedAt || egg.createdAt
+        ),
       };
 
       res.json({
@@ -97,10 +118,17 @@ export const EggController = {
   async purchaseEgg(req, res) {
     try {
       const { eggType, currency = "coins" } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh user instance
+      const user = await User.findById(req.user._id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
       // Validate egg type
-      const validEggTypes = ["basic", "premium", "cosmetic", "mystery"];
+      const validEggTypes = Object.values(EGG_TYPES);
       if (!validEggTypes.includes(eggType)) {
         return res.status(400).json({
           success: false,
@@ -112,10 +140,10 @@ export const EggController = {
       const cost = this.calculateEggCost(eggType, currency);
 
       // Check if user can afford the egg
-      if (currency === "coins" && user.coins < cost) {
+      if (currency === "coins" && user.balance < cost) {
         return res.status(400).json({
           success: false,
-          message: `Not enough coins. Cost: ${cost}, You have: ${user.coins}`,
+          message: `Not enough coins. Cost: ${cost}, You have: ${user.balance}`,
         });
       }
 
@@ -127,28 +155,28 @@ export const EggController = {
       }
 
       // Generate egg data using RNG service
-      const eggData = serverRNGService.generateEggForDB(
-        user._id,
-        eggType.toUpperCase()
-      );
+      const eggData = serverRNGService.generateEggForDB(user.id, eggType);
 
-      const egg = new Egg({
-        ...eggData,
-        purchased: true,
-        purchasePrice: cost,
-        currency,
-      });
+      // Create new egg instance
+      const egg = new Egg(eggType, user.id);
 
-      await egg.save();
+      // Add purchase metadata
+      egg.purchased = true;
+      egg.purchasePrice = cost;
+      egg.currency = currency;
+      egg.obtainedAt = new Date();
 
-      // Update user using User model methods
+      // Add egg to user's collection
+      user.addEgg(egg);
+
+      // Update user balance
       if (currency === "coins") {
-        user.coins -= cost;
+        user.deductBalance(cost);
       }
-      user.ownedEggs.push(egg._id);
 
       // Add experience for purchasing
-      const expResult = user.addExperience(10); // 10 XP per egg purchase
+      user.experience += 10;
+      const leveledUp = this.checkLevelUp(user);
 
       await user.save();
 
@@ -161,30 +189,27 @@ export const EggController = {
         message: "Egg purchased successfully!",
         data: {
           egg: {
-            id: egg._id,
-            eggType: egg.eggType,
+            id: egg.id,
+            type: egg.type,
             rarity: egg.rarity,
-            skin: egg.skin,
-            canHatch: true,
+            canHatch: !egg.isHatched,
             purchasePrice: egg.purchasePrice,
             currency: egg.currency,
           },
           user: {
-            coins: user.coins,
-            ownedEggs: user.ownedEggs.length,
+            balance: user.balance,
+            eggs: user.eggs.length,
             level: user.level,
             experience: user.experience,
-            totalBattles: user.totalBattles, // Using virtual
-            winRate: user.winRate, // Using virtual
           },
         },
       };
 
       // Add level up notification if applicable
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+      if (leveledUp) {
+        responseData.message += ` You leveled up to level ${user.level}!`;
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.status(201).json(responseData);
@@ -200,17 +225,22 @@ export const EggController = {
   // Get free daily egg (if available)
   async getFreeEgg(req, res) {
     try {
-      const user = await User.findById(req.user._id); // Get fresh user instance
+      const user = await User.findById(req.user._id);
 
-      // Check if user can claim free egg using User model method
-      const canClaimFreeEgg = user.canGetFreeRoll();
-      if (!canClaimFreeEgg) {
-        const lastFreeEgg = new Date(user.lastFreeRoll);
-        const now = new Date();
-        const hoursRemaining = Math.ceil(
-          24 - (now - lastFreeEgg) / (1000 * 60 * 60)
-        );
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
+      // Check if user can claim free egg (simplified logic)
+      const lastFreeEgg = user.lastFreeRoll || new Date(0);
+      const now = new Date();
+      const hoursSinceLastFree = (now - lastFreeEgg) / (1000 * 60 * 60);
+
+      if (hoursSinceLastFree < 24) {
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastFree);
         return res.status(400).json({
           success: false,
           message: `Please wait ${hoursRemaining} more hours to claim your next free egg`,
@@ -218,17 +248,20 @@ export const EggController = {
       }
 
       // Generate free basic egg using RNG service
-      const eggData = serverRNGService.generateEggForDB(user._id, "BASIC");
-      const egg = new Egg(eggData);
-      await egg.save();
+      const eggData = serverRNGService.generateEggForDB(
+        user.id,
+        EGG_TYPES.BASIC
+      );
+      const egg = new Egg(EGG_TYPES.BASIC, user.id);
+      egg.obtainedAt = new Date();
+
+      // Add egg to user's collection
+      user.addEgg(egg);
 
       // Update user
       user.lastFreeRoll = new Date();
-      user.freeRolls = Math.max(0, user.freeRolls - 1);
-      user.ownedEggs.push(egg._id);
-
-      // Add experience for claiming free egg
-      const expResult = user.addExperience(5); // 5 XP for free egg
+      user.experience += 5; // 5 XP for free egg
+      const leveledUp = this.checkLevelUp(user);
 
       await user.save();
 
@@ -239,15 +272,14 @@ export const EggController = {
         message: "Free egg claimed successfully!",
         data: {
           egg: {
-            id: egg._id,
-            eggType: egg.eggType,
+            id: egg.id,
+            type: egg.type,
             rarity: egg.rarity,
-            canHatch: true,
+            canHatch: !egg.isHatched,
           },
           user: {
-            ownedEggs: user.ownedEggs.length,
+            eggs: user.eggs.length,
             lastFreeRoll: user.lastFreeRoll,
-            freeRolls: user.freeRolls,
             level: user.level,
             experience: user.experience,
           },
@@ -255,10 +287,10 @@ export const EggController = {
       };
 
       // Add level up notification if applicable
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+      if (leveledUp) {
+        responseData.message += ` You leveled up to level ${user.level}!`;
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.json(responseData);
@@ -275,9 +307,16 @@ export const EggController = {
   async previewEgg(req, res) {
     try {
       const { eggId } = req.params;
-      const user = req.user;
+      const user = await User.findById(req.user._id);
 
-      const egg = await Egg.findOne({ _id: eggId, owner: user._id });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const egg = user.eggs.find((e) => e.id === eggId);
       if (!egg) {
         return res.status(404).json({
           success: false,
@@ -292,26 +331,17 @@ export const EggController = {
         });
       }
 
-      // Generate preview of potential pets using RNG service weights
-      const totalWeight = egg.potentialPets.reduce(
-        (sum, pet) => sum + pet.weight,
-        0
-      );
-      const previewPets = egg.potentialPets.map((pet) => ({
-        tier: pet.tier,
-        type: serverRNGService.getRandomPetType(),
-        probability: ((pet.weight / totalWeight) * 100).toFixed(1) + "%",
-        description: `Chance to get a ${pet.tier} ${pet.type || "random"} pet`,
-      }));
+      // Generate preview of potential contents based on egg type
+      const previewContents = this.getPotentialContents(egg.type);
 
       res.json({
         success: true,
         data: {
           egg: {
-            id: egg._id,
-            eggType: egg.eggType,
+            id: egg.id,
+            type: egg.type,
             rarity: egg.rarity,
-            previewPets,
+            previewContents,
             hatchCost: this.calculateHatchCost(egg),
           },
         },
@@ -330,9 +360,16 @@ export const EggController = {
     try {
       const { eggId } = req.params;
       const { skin, animation } = req.body;
-      const user = req.user;
+      const user = await User.findById(req.user._id);
 
-      const egg = await Egg.findOne({ _id: eggId, owner: user._id });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const egg = user.eggs.find((e) => e.id === eggId);
       if (!egg) {
         return res.status(404).json({
           success: false,
@@ -351,7 +388,8 @@ export const EggController = {
       if (skin) egg.skin = skin;
       if (animation) egg.animation = animation;
 
-      await egg.save();
+      user.updatedAt = new Date();
+      await user.save();
 
       logger.info(`User ${user.username} applied cosmetic to egg ${eggId}`);
 
@@ -360,7 +398,7 @@ export const EggController = {
         message: "Cosmetic applied successfully!",
         data: {
           egg: {
-            id: egg._id,
+            id: egg.id,
             skin: egg.skin,
             animation: egg.animation,
           },
@@ -379,16 +417,24 @@ export const EggController = {
   async hatchEgg(req, res) {
     try {
       const { eggId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh user instance
+      const user = await User.findById(req.user._id);
 
-      const egg = await Egg.findOne({ _id: eggId, owner: user._id });
-      if (!egg) {
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const eggIndex = user.eggs.findIndex((e) => e.id === eggId);
+      if (eggIndex === -1) {
         return res.status(404).json({
           success: false,
           message: "Egg not found",
         });
       }
 
+      const egg = user.eggs[eggIndex];
       if (egg.isHatched) {
         return res.status(400).json({
           success: false,
@@ -398,82 +444,49 @@ export const EggController = {
 
       // Check hatch cost (if any)
       const hatchCost = this.calculateHatchCost(egg);
-      if (user.coins < hatchCost) {
+      if (user.balance < hatchCost) {
         return res.status(400).json({
           success: false,
-          message: `Not enough coins to hatch. Cost: ${hatchCost}, You have: ${user.coins}`,
+          message: `Not enough coins to hatch. Cost: ${hatchCost}, You have: ${user.balance}`,
         });
       }
 
-      // Use RNG service to generate pet from egg
-      const pityCounter = user.petsHatched || 0;
-      const petData = serverRNGService.generatePetForDB(user._id, pityCounter);
+      // Use User model's hatchEgg method
+      const result = user.hatchEgg(eggIndex);
 
-      // Create pet in database
-      const Pet = (await import("../models/Pet.js")).default;
-      const pet = new Pet(petData);
-      await pet.save();
-
-      // Update egg as hatched
-      egg.isHatched = true;
-      egg.hatchDate = new Date();
-      await egg.save();
-
-      // Update user using User model methods
-      user.coins -= hatchCost;
-      user.petsHatched += 1;
-      user.ownedPets.push(pet._id);
-
-      // Remove egg from user's owned eggs
-      user.ownedEggs = user.ownedEggs.filter(
-        (ownedEggId) => !ownedEggId.equals(egg._id)
-      );
+      // Update user balance
+      user.deductBalance(hatchCost);
 
       // Add experience for hatching
-      const expResult = user.addExperience(25); // 25 XP per hatch
+      user.experience += 25;
+      const leveledUp = this.checkLevelUp(user);
 
       await user.save();
 
-      logger.info(
-        `User ${user.username} hatched egg ${eggId} into pet ${pet._id}`
-      );
+      logger.info(`User ${user.username} hatched egg ${eggId}`);
 
       const responseData = {
         success: true,
         message: "Egg hatched successfully!",
         data: {
-          pet: {
-            id: pet._id,
-            name: pet.name,
-            tier: pet.tier,
-            type: pet.type,
-            abilities: pet.abilities,
-            stats: pet.stats,
-            level: pet.level,
-          },
-          egg: {
-            id: egg._id,
-            isHatched: true,
-            hatchDate: egg.hatchDate,
-          },
+          result: this.formatHatchResult(result),
           user: {
-            coins: user.coins,
-            petsHatched: user.petsHatched,
-            ownedPets: user.ownedPets.length,
-            ownedEggs: user.ownedEggs.length,
+            balance: user.balance,
+            pets: user.pets.length,
+            eggs: user.eggs.length,
+            techniques: user.techniques.length,
+            skins: user.skins.length,
             level: user.level,
             experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
           },
         },
       };
 
       // Add level up notification if applicable
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+      if (leveledUp) {
+        responseData.message += ` You leveled up to level ${user.level}!`;
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.json(responseData);
@@ -489,10 +502,17 @@ export const EggController = {
   // Get available egg types and their costs
   async getEggCatalog(req, res) {
     try {
-      const user = req.user;
+      const user = await User.findById(req.user._id);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
       const catalog = {
-        basic: {
+        [EGG_TYPES.BASIC]: {
           name: "Basic Egg",
           description: "A standard egg with common to rare pets",
           costs: {
@@ -502,9 +522,9 @@ export const EggController = {
           },
           dropRates: serverRNGService.getEggDropRates("BASIC"),
           canPurchase: true,
-          canAfford: user.coins >= 100,
+          canAfford: user.balance >= 100,
         },
-        premium: {
+        [EGG_TYPES.PREMIUM]: {
           name: "Premium Egg",
           description: "Higher chance for rare and epic pets",
           costs: {
@@ -514,11 +534,11 @@ export const EggController = {
           },
           dropRates: serverRNGService.getEggDropRates("PREMIUM"),
           canPurchase: true,
-          canAfford: user.coins >= 250,
+          canAfford: user.balance >= 250,
         },
-        cosmetic: {
+        [EGG_TYPES.COSMETIC]: {
           name: "Cosmetic Egg",
-          description: "Special skins and animations for your eggs",
+          description: "Special skins and animations for your eggs and pets",
           costs: {
             coins: 150,
             ETH: "0.003",
@@ -526,19 +546,19 @@ export const EggController = {
           },
           dropRates: serverRNGService.getEggDropRates("COSMETIC"),
           canPurchase: true,
-          canAfford: user.coins >= 150,
+          canAfford: user.balance >= 150,
         },
-        mystery: {
-          name: "Mystery Egg",
-          description: "Surprise egg with random contents",
+        [EGG_TYPES.ATTRIBUTE]: {
+          name: "Attribute Egg",
+          description: "Grants powerful techniques and abilities",
           costs: {
             coins: 200,
             ETH: "0.004",
             MATIC: "0.4",
           },
-          dropRates: serverRNGService.getEggDropRates("MYSTERY"),
+          dropRates: serverRNGService.getEggDropRates("ATTRIBUTE"),
           canPurchase: true,
-          canAfford: user.coins >= 200,
+          canAfford: user.balance >= 200,
         },
       };
 
@@ -547,10 +567,9 @@ export const EggController = {
         data: {
           catalog,
           user: {
-            coins: user.coins,
+            balance: user.balance,
             level: user.level,
-            freeRolls: user.freeRolls,
-            canClaimFreeEgg: user.canGetFreeRoll(),
+            canClaimFreeEgg: this.canClaimFreeEgg(user),
           },
         },
       });
@@ -566,25 +585,25 @@ export const EggController = {
   // Helper methods
   calculateEggCost(eggType, currency) {
     const costs = {
-      basic: { coins: 100, ETH: 0.001, MATIC: 0.1 },
-      premium: { coins: 250, ETH: 0.005, MATIC: 0.5 },
-      cosmetic: { coins: 150, ETH: 0.003, MATIC: 0.3 },
-      mystery: { coins: 200, ETH: 0.004, MATIC: 0.4 },
+      [EGG_TYPES.BASIC]: { coins: 100, ETH: 0.001, MATIC: 0.1 },
+      [EGG_TYPES.PREMIUM]: { coins: 250, ETH: 0.005, MATIC: 0.5 },
+      [EGG_TYPES.COSMETIC]: { coins: 150, ETH: 0.003, MATIC: 0.3 },
+      [EGG_TYPES.ATTRIBUTE]: { coins: 200, ETH: 0.004, MATIC: 0.4 },
     };
 
-    return costs[eggType]?.[currency] || costs.basic.coins;
+    return costs[eggType]?.[currency] || costs[EGG_TYPES.BASIC].coins;
   },
 
   calculateHatchCost(egg) {
     const baseCost = 50;
     const multipliers = {
-      basic: 1,
-      premium: 1.2,
-      cosmetic: 1.5,
-      mystery: 1.3,
+      [EGG_TYPES.BASIC]: 1,
+      [EGG_TYPES.PREMIUM]: 1.2,
+      [EGG_TYPES.COSMETIC]: 1.5,
+      [EGG_TYPES.ATTRIBUTE]: 1.3,
     };
 
-    return Math.floor(baseCost * (multipliers[egg.eggType] || 1));
+    return Math.floor(baseCost * (multipliers[egg.type] || 1));
   },
 
   getHatchRequirements(egg) {
@@ -595,14 +614,39 @@ export const EggController = {
     };
   },
 
-  getPotentialPetsInfo(potentialPets) {
-    const totalWeight = potentialPets.reduce((sum, pet) => sum + pet.weight, 0);
-    return potentialPets.map((pet) => ({
-      tier: pet.tier,
-      type: pet.type || "Random",
-      probability: ((pet.weight / totalWeight) * 100).toFixed(1) + "%",
-      description: `Chance to get a ${pet.tier} ${pet.type || "random"} pet`,
-    }));
+  getPotentialContents(eggType) {
+    const contents = {
+      [EGG_TYPES.BASIC]: [
+        {
+          type: "Pet",
+          probability: "100%",
+          description: "Random pet of varying rarity",
+        },
+      ],
+      [EGG_TYPES.PREMIUM]: [
+        {
+          type: "Pet",
+          probability: "100%",
+          description: "Higher chance for rare pets",
+        },
+      ],
+      [EGG_TYPES.COSMETIC]: [
+        {
+          type: "Skin",
+          probability: "100%",
+          description: "Cosmetic skins and animations",
+        },
+      ],
+      [EGG_TYPES.ATTRIBUTE]: [
+        {
+          type: "Technique",
+          probability: "100%",
+          description: "Powerful battle techniques",
+        },
+      ],
+    };
+
+    return contents[eggType] || contents[EGG_TYPES.BASIC];
   },
 
   calculateHatchTime(createdAt) {
@@ -621,50 +665,82 @@ export const EggController = {
     }
   },
 
-  async getEggStats(userId) {
-    const stats = await Egg.aggregate([
-      { $match: { owner: userId } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          hatched: { $sum: { $cond: ["$isHatched", 1, 0] } },
-          byType: {
-            $push: {
-              type: "$eggType",
-              hatched: { $cond: ["$isHatched", 1, 0] },
-            },
-          },
-        },
-      },
-    ]);
+  getEggStats(eggs) {
+    const stats = {
+      total: eggs.length,
+      hatched: eggs.filter((egg) => egg.isHatched).length,
+      unhatched: eggs.filter((egg) => !egg.isHatched).length,
+      byType: {},
+    };
 
-    if (stats.length === 0) {
+    eggs.forEach((egg) => {
+      if (!stats.byType[egg.type]) {
+        stats.byType[egg.type] = { total: 0, hatched: 0 };
+      }
+      stats.byType[egg.type].total += 1;
+      if (egg.isHatched) {
+        stats.byType[egg.type].hatched += 1;
+      }
+    });
+
+    return stats;
+  },
+
+  checkLevelUp(user) {
+    const oldLevel = user.level;
+    const threshold = user.level * 100;
+
+    if (user.experience >= threshold) {
+      user.level += 1;
+      user.experience -= threshold;
+      return true;
+    }
+    return false;
+  },
+
+  canClaimFreeEgg(user) {
+    const lastFreeEgg = user.lastFreeRoll || new Date(0);
+    const now = new Date();
+    const hoursSinceLastFree = (now - lastFreeEgg) / (1000 * 60 * 60);
+    return hoursSinceLastFree >= 24;
+  },
+
+  formatHatchResult(result) {
+    if (result instanceof Pet) {
       return {
-        total: 0,
-        hatched: 0,
-        unhatched: 0,
-        byType: {},
+        type: "Pet",
+        data: {
+          id: result.id,
+          name: result.name,
+          type: result.type,
+          rarity: result.rarity,
+          stats: result.stats,
+          level: result.level,
+          isShiny: result.isShiny,
+        },
+      };
+    } else if (result.type === "Technique") {
+      return {
+        type: "Technique",
+        data: {
+          id: result.id,
+          name: result.name,
+          rarity: result.rarity,
+          effect: result.effect,
+        },
+      };
+    } else if (result.type === "Cosmetic") {
+      return {
+        type: "Cosmetic",
+        data: {
+          id: result.id,
+          name: result.name,
+          rarity: result.rarity,
+        },
       };
     }
 
-    const stat = stats[0];
-    const byType = {};
-
-    stat.byType.forEach((item) => {
-      if (!byType[item.type]) {
-        byType[item.type] = { total: 0, hatched: 0 };
-      }
-      byType[item.type].total += 1;
-      byType[item.type].hatched += item.hatched;
-    });
-
-    return {
-      total: stat.total,
-      hatched: stat.hatched,
-      unhatched: stat.total - stat.hatched,
-      byType,
-    };
+    return result;
   },
 };
 

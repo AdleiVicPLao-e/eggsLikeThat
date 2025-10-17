@@ -16,3 +16,9 @@
 {"level":"info","message":"🔗 Client URL: http://localhost:3000","service":"pet-game-server","timestamp":"2025-10-16T05:51:23.875Z"}
 {"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-16T05:51:23.876Z"}
 {"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-16T05:51:23.931Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.713Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.761Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.762Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:3000","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.763Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.769Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-16T07:55:30.792Z"}

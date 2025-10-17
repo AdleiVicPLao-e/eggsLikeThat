@@ -560,13 +560,23 @@ export const PetController = {
           rare: { minPets: 4, minLevel: 15, cost: 2000 },
           epic: { minPets: 4, minLevel: 20, cost: 5000 },
           legendary: { minPets: 5, minLevel: 25, cost: 10000 },
+          Mythic: { minPets: 5, minLevel: 30, cost: 12000 },
+          Celestial: { minPets: 6, minLevel: 35, cost: 15000 },
+          Exotic: { minPets: 6, minLevel: 40, cost: 20000 },
+          Ultimate: { minPets: 7, minLevel: 45, cost: 22000 },
+          Godly: { minPets: 7, minLevel: 50, cost: 25000 },
         },
         successRates: {
-          common: 0.8,
-          uncommon: 0.6,
-          rare: 0.4,
-          epic: 0.25,
-          legendary: 0.1,
+          Common: 0.6,
+          Uncommon: 0.2,
+          Rare: 0.1,
+          Epic: 0.04,
+          Legendary: 0.02,
+          Mythic: 0.01,
+          Celestial: 0.005,
+          Exotic: 0.0025,
+          Ultimate: 0.0015,
+          Godly: 0.001,
         },
         userStats: {
           coins: user.coins,
@@ -596,11 +606,16 @@ export const PetController = {
   calculateStatIncrease(tier, level) {
     const baseIncrease = 0.08; // 8% base
     const tierMultipliers = {
-      common: 1,
-      uncommon: 1.1,
-      rare: 1.2,
-      epic: 1.3,
-      legendary: 1.5,
+      Common: 1.0,
+      Uncommon: 1.15,
+      Rare: 1.3,
+      Epic: 1.6,
+      Legendary: 2.0,
+      Mythic: 2.4,
+      Celestial: 2.8,
+      Exotic: 3.2,
+      Ultimate: 3.8,
+      Godly: 4.5,
     };
     const levelBonus = Math.min(level * 0.005, 0.1); // Up to 10% bonus from level
 
@@ -650,21 +665,32 @@ export const PetController = {
     // Calculate success chance based on pet quality
     const totalValue = materialPets.reduce((sum, pet) => {
       const tierValues = {
-        common: 1,
-        uncommon: 2,
-        rare: 4,
-        epic: 8,
-        legendary: 16,
+        Common: 1.0,
+        Uncommon: 1.15,
+        Rare: 1.3,
+        Epic: 1.6,
+        Legendary: 2.0,
+        Mythic: 2.4,
+        Celestial: 2.8,
+        Exotic: 3.2,
+        Ultimate: 3.8,
+        Godly: 4.5,
       };
       return sum + (tierValues[pet.tier] || 1) * pet.level;
     }, 0);
 
     const baseSuccessRate =
       {
-        uncommon: 0.8,
-        rare: 0.6,
-        epic: 0.4,
-        legendary: 0.2,
+        Common: 0.6,
+        Uncommon: 0.2,
+        Rare: 0.1,
+        Epic: 0.04,
+        Legendary: 0.02,
+        Mythic: 0.01,
+        Celestial: 0.005,
+        Exotic: 0.0025,
+        Ultimate: 0.0015,
+        Godly: 0.001,
       }[targetTier] || 0.5;
 
     const successChance = Math.min(baseSuccessRate + totalValue * 0.01, 0.95);
@@ -682,11 +708,16 @@ export const PetController = {
   calculateQualityMultiplier(materialPets) {
     const totalValue = materialPets.reduce((sum, pet) => {
       const tierValues = {
-        common: 1,
-        uncommon: 1.2,
-        rare: 1.4,
-        epic: 1.7,
-        legendary: 2.0,
+        Common: 1.0,
+        Uncommon: 1.15,
+        Rare: 1.3,
+        Epic: 1.6,
+        Legendary: 2.0,
+        Mythic: 2.4,
+        Celestial: 2.8,
+        Exotic: 3.2,
+        Ultimate: 3.8,
+        Godly: 4.5,
       };
       return sum + (tierValues[pet.tier] || 1);
     }, 0);

@@ -1,99 +1,93 @@
-import mongoose from "mongoose";
+import { EGG_TYPES, SKIN_RARITIES, TECHNIQUES } from "../utils/constants.js";
+import { weightedRandom, generateRandomPet } from "../utils/rng.js";
+import { Pet } from "./Pet.js";
 
-const eggSchema = new mongoose.Schema(
-  {
-    // Egg type and rarity
-    eggType: {
-      type: String,
-      required: true,
-      enum: ["basic", "premium", "cosmetic", "mystery"],
-    },
-
-    rarity: {
-      type: String,
-      required: true,
-      enum: ["common", "uncommon", "rare", "epic", "legendary"],
-    },
-
-    // Contents (determined at hatch time)
-    potentialPets: [
-      {
-        tier: String,
-        type: String,
-        weight: Number, // Probability weight
-      },
-    ],
-
-    // Ownership
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
-    // Hatching status
-    isHatched: {
-      type: Boolean,
-      default: false,
-    },
-    hatchDate: {
-      type: Date,
-    },
-
-    // Cosmetic properties
-    skin: {
-      type: String,
-      default: "default",
-    },
-    animation: {
-      type: String,
-      default: "default",
-    },
-
-    // Purchase info (for premium eggs)
-    purchased: {
-      type: Boolean,
-      default: false,
-    },
-    purchasePrice: {
-      type: Number,
-      default: 0,
-    },
-    currency: {
-      type: String,
-      enum: ["coins", "ETH", "MATIC", "USDC"],
-      default: "coins",
-    },
-  },
-  {
-    timestamps: true,
+export class Egg {
+  constructor(type, ownerId = null) {
+    this.type = type;
+    this.ownerId = ownerId;
+    this.isHatched = false;
+    this.contents = null;
   }
-);
 
-// Indexes
-eggSchema.index({ owner: 1, isHatched: 1 });
-eggSchema.index({ rarity: 1, eggType: 1 });
+  hatch() {
+    if (this.isHatched) throw new Error("This egg has already been hatched.");
 
-// Method to check if egg can be hatched
-eggSchema.methods.canHatch = function () {
-  return !this.isHatched;
-};
+    let result;
+    switch (this.type) {
+      case EGG_TYPES.BASIC:
+        result = this.hatchPet();
+        break;
+      case EGG_TYPES.COSMETIC:
+        result = this.hatchSkin();
+        break;
+      case EGG_TYPES.ATTRIBUTE:
+        result = this.hatchTechnique();
+        break;
+      default:
+        throw new Error(`Unknown egg type: ${this.type}`);
+    }
 
-// Static method to create basic egg
-eggSchema.statics.createBasicEgg = function (ownerId) {
-  return this.create({
-    eggType: "basic",
-    rarity: "common",
-    owner: ownerId,
-    potentialPets: [
-      { tier: "common", type: "Fire", weight: 50 },
-      { tier: "common", type: "Water", weight: 50 },
-      { tier: "uncommon", type: "Earth", weight: 30 },
-      { tier: "rare", type: "Air", weight: 15 },
-      { tier: "epic", type: "Light", weight: 4 },
-      { tier: "legendary", type: "Dark", weight: 1 },
-    ],
-  });
-};
+    this.isHatched = true;
+    this.contents = result;
+    return result;
+  }
 
-export default mongoose.model("Egg", eggSchema);
+  /** 🐣 Hatch a pet using RNG logic */
+  hatchPet() {
+    // Generate fully randomized pet data (rarity, stats, abilities, etc.)
+    const petData = generateRandomPet(this.ownerId);
+
+    // Create a Pet instance
+    const pet = new Pet(petData);
+
+    return pet;
+  }
+
+  /** 🎨 Hatch a skin cosmetic */
+  hatchSkin() {
+    const rarity = weightedRandom(SKIN_RARITIES);
+    return {
+      id: crypto.randomUUID(),
+      name: `${rarity.name} Skin`,
+      rarity: rarity.name,
+      type: "Cosmetic",
+      ownerId: this.ownerId,
+      obtainedAt: new Date(),
+    };
+  }
+
+  /** 🧠 Hatch a random technique */
+  hatchTechnique() {
+    // Flatten TECHNIQUES with level weights
+    const allTechs = TECHNIQUES.flatMap((t) =>
+      t.levels
+        ? t.levels.map((l) => ({
+            name: `${t.name} Lv.${l.level}`,
+            chance: l.chance,
+            effect: l.effect,
+          }))
+        : [t]
+    );
+
+    const tech = weightedRandom(allTechs);
+    return {
+      id: crypto.randomUUID(),
+      name: tech.name,
+      rarity: this.getTechniqueRarity(tech.chance),
+      effect: tech.effect,
+      type: "Technique",
+      ownerId: this.ownerId,
+      obtainedAt: new Date(),
+    };
+  }
+
+  /** 🧮 Technique rarity tier mapping */
+  getTechniqueRarity(chance) {
+    if (chance <= 0.1) return "Godly";
+    if (chance <= 1) return "Legendary";
+    if (chance <= 3) return "Epic";
+    if (chance <= 10) return "Rare";
+    return "Common";
+  }
+}

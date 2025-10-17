@@ -1,146 +1,162 @@
-import mongoose from "mongoose";
+// src/models/Pet.js
 
-const statSchema = new mongoose.Schema({
-  attack: { type: Number, required: true, min: 1, max: 500 },
-  defense: { type: Number, required: true, min: 1, max: 500 },
-  speed: { type: Number, required: true, min: 1, max: 500 },
-  health: { type: Number, required: true, min: 1, max: 1000 },
-});
+export class Pet {
+  constructor({
+    id = crypto.randomUUID(),
+    ownerId = null,
+    name,
+    type,
+    rarity,
+    ability,
+    technique = null,
+    skin = null,
 
-const petSchema = new mongoose.Schema(
-  {
-    // Basic info
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 50,
+    // Core stats
+    stats = {
+      dmg: 10,
+      hp: 50,
+      range: 1,
+      spa: 1.0, // seconds per attack
+      critChance: 0,
+      critDamage: 0,
+      moneyBonus: 0,
     },
 
-    // Rarity and type
-    tier: {
-      type: String,
-      required: true,
-      enum: ["common", "uncommon", "rare", "epic", "legendary"],
-    },
-    type: {
-      type: String,
-      required: true,
-      enum: ["Fire", "Water", "Earth", "Air", "Light", "Dark"],
-    },
-
-    // Game data
-    abilities: [
-      {
-        name: String,
-        description: String,
-        power: Number,
-        cooldown: Number,
-      },
-    ],
-
-    stats: statSchema,
+    // Battle state
+    currentHP = stats.hp,
+    statusEffects = [],
+    isAlive = true,
 
     // Progression
-    level: {
-      type: Number,
-      default: 1,
-      min: 1,
-      max: 100,
-    },
-    experience: {
-      type: Number,
-      default: 0,
-    },
+    level = 1,
+    experience = 0,
+    evolutionStage = 1,
+    evolutions = [],
 
-    // Ownership
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
-    // Blockchain integration
-    tokenId: {
-      type: String,
-      sparse: true,
-    },
-    network: {
-      type: String,
-      enum: ["ethereum", "polygon", null],
-      default: null,
-    },
+    // Cosmetics
+    title = null,
+    isShiny = false,
 
     // Metadata
-    hatchDate: {
-      type: Date,
-      default: Date.now,
-    },
-    isFavorite: {
-      type: Boolean,
-      default: false,
-    },
+    createdAt = new Date(),
+    updatedAt = new Date(),
+  }) {
+    this.id = id;
+    this.ownerId = ownerId;
+    this.name = name;
+    this.type = type;
+    this.rarity = rarity;
+    this.ability = ability;
+    this.technique = technique;
+    this.skin = skin;
 
-    // Battle stats
-    battlesWon: {
-      type: Number,
-      default: 0,
-    },
-    battlesLost: {
-      type: Number,
-      default: 0,
-    },
-  },
-  {
-    timestamps: true,
+    this.stats = stats;
+    this.currentHP = currentHP;
+    this.statusEffects = statusEffects;
+    this.isAlive = isAlive;
+
+    this.level = level;
+    this.experience = experience;
+    this.evolutionStage = evolutionStage;
+    this.evolutions = evolutions;
+
+    this.title = title;
+    this.isShiny = isShiny;
+
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
   }
-);
 
-// Indexes for common queries
-petSchema.index({ owner: 1, tier: 1 });
-petSchema.index({ tier: 1, type: 1 });
-petSchema.index({ "stats.attack": -1 });
-petSchema.index({ createdAt: -1 });
+  /** --- 🧠 Core Functions --- **/
 
-// Virtual for total battles
-petSchema.virtual("totalBattles").get(function () {
-  return this.battlesWon + this.battlesLost;
-});
+  gainExperience(amount) {
+    if (!amount || amount <= 0) return;
+    this.experience += amount;
 
-// Virtual for win rate
-petSchema.virtual("winRate").get(function () {
-  const total = this.totalBattles;
-  return total > 0 ? ((this.battlesWon / total) * 100).toFixed(1) : 0;
-});
+    const threshold = this.level * 100;
+    if (this.experience >= threshold) {
+      this.experience -= threshold;
+      this.levelUp();
+    }
+  }
 
-// Method to calculate power level
-petSchema.methods.calculatePower = function () {
-  const basePower =
-    this.stats.attack +
-    this.stats.defense +
-    this.stats.speed +
-    this.stats.health / 10;
-  const tierMultiplier = {
-    common: 1,
-    uncommon: 1.2,
-    rare: 1.5,
-    epic: 2,
-    legendary: 3,
-  };
+  levelUp() {
+    this.level++;
+    this.stats.dmg = Math.round(this.stats.dmg * 1.1);
+    this.stats.hp = Math.round(this.stats.hp * 1.1);
+    this.stats.range = +(this.stats.range * 1.02).toFixed(2);
+    this.stats.spa = +(this.stats.spa * 0.97).toFixed(2);
+    this.currentHP = this.stats.hp;
+  }
 
-  return Math.round(
-    basePower * tierMultiplier[this.tier] * (1 + (this.level - 1) * 0.1)
-  );
-};
+  takeDamage(amount) {
+    this.currentHP -= amount;
+    if (this.currentHP <= 0) {
+      this.currentHP = 0;
+      this.isAlive = false;
+    }
+  }
 
-// Static method to find by tier
-petSchema.statics.findByTier = function (tier) {
-  return this.find({ tier }).populate("owner", "username");
-};
+  heal(amount) {
+    if (!this.isAlive) return;
+    this.currentHP = Math.min(this.stats.hp, this.currentHP + amount);
+  }
 
-// Static method to get user's pets
-petSchema.statics.findByOwner = function (ownerId) {
-  return this.find({ owner: ownerId }).sort({ tier: -1, level: -1 });
-};
+  applyStatus(status) {
+    if (!this.statusEffects.find((s) => s.name === status.name)) {
+      this.statusEffects.push(status);
+    }
+  }
 
-export default mongoose.model("Pet", petSchema);
+  removeStatus(name) {
+    this.statusEffects = this.statusEffects.filter((s) => s.name !== name);
+  }
+
+  /** --- 🧩 Utility --- **/
+
+  resetBattleState() {
+    this.currentHP = this.stats.hp;
+    this.statusEffects = [];
+    this.isAlive = true;
+  }
+
+  evolve(newForm) {
+    if (!newForm) return;
+    this.evolutionStage++;
+    this.name = newForm.name || this.name;
+    this.stats = {
+      ...this.stats,
+      dmg: Math.round(this.stats.dmg * 1.25),
+      hp: Math.round(this.stats.hp * 1.25),
+    };
+    this.rarity = newForm.rarity || this.rarity;
+    this.evolutions.push(newForm.name);
+  }
+
+  /** --- 🔍 Output --- **/
+
+  toJSON() {
+    return {
+      id: this.id,
+      ownerId: this.ownerId,
+      name: this.name,
+      type: this.type,
+      rarity: this.rarity,
+      ability: this.ability,
+      technique: this.technique,
+      skin: this.skin,
+      stats: this.stats,
+      currentHP: this.currentHP,
+      statusEffects: this.statusEffects,
+      isAlive: this.isAlive,
+      level: this.level,
+      experience: this.experience,
+      evolutionStage: this.evolutionStage,
+      evolutions: this.evolutions,
+      title: this.title,
+      isShiny: this.isShiny,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+}

@@ -1,3 +1,4 @@
+// routes/egg.route.js
 import express from "express";
 import { EggController } from "../controllers/EggController.js";
 import { authenticate } from "../middleware/authMiddleware.js";
@@ -19,6 +20,9 @@ router.post("/purchase", gameActionLimiter, EggController.purchaseEgg);
 
 // Get free daily egg
 router.post("/free", gameActionLimiter, EggController.getFreeEgg);
+
+// Hatch egg
+router.post("/:eggId/hatch", gameActionLimiter, EggController.hatchEgg);
 
 // Preview egg contents
 router.get("/:eggId/preview", gameActionLimiter, EggController.previewEgg);

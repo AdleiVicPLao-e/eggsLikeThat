@@ -1,568 +1,211 @@
-import User from "../models/User.js";
-import {
-  generateToken,
-  verifyWalletSignature,
-  generateNonce,
-} from "../utils/cryptoUtils.js";
-import { mailService } from "../services/MailService.js";
-import logger from "../utils/logger.js";
+// src/models/User.js
+import { Wallet } from "ethers";
+import { Pet } from "./Pet.js";
+import { Egg } from "./Egg.js";
 
-export const AuthController = {
-  // Register new user with email/password
-  async register(req, res) {
-    try {
-      const { username, email, password } = req.body;
+export class User {
+  constructor({
+    id = crypto.randomUUID(),
+    username,
+    email,
+    passwordHash, // In real app, use proper hashing like bcrypt
+    walletAddress = null,
+    privateKey = null, // In production, never store plain private keys!
 
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [{ email: email.toLowerCase() }, { username }],
-      });
+    // Inventory
+    pets = [],
+    eggs = [],
+    techniques = [],
+    skins = [],
+    balance = 0, // In-game currency
 
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message:
-            existingUser.email === email.toLowerCase()
-              ? "Email already registered"
-              : "Username already taken",
-        });
-      }
+    // Blockchain assets
+    nftTokens = [], // Track NFT token IDs owned
+    transactions = [], // Transaction history
 
-      // Create new user
-      const user = new User({
-        authMethod: "email",
-        email: email.toLowerCase(),
-        username,
-        password,
-        // Free starting resources
-        coins: 1000,
-        freeRolls: 3,
-      });
+    // Game progression
+    level = 1,
+    experience = 0,
+    rank = "Beginner",
 
-      await user.save();
+    // Metadata
+    createdAt = new Date(),
+    updatedAt = new Date(),
+    lastLogin = new Date(),
+  }) {
+    this.id = id;
+    this.username = username;
+    this.email = email;
+    this.passwordHash = passwordHash;
 
-      // Generate JWT token
-      const token = generateToken({
-        userId: user._id,
-        email: user.email,
-        authMethod: user.authMethod,
-      });
+    // Blockchain identity
+    this.walletAddress = walletAddress;
+    this.privateKey = privateKey; // ⚠️ Remove in production!
 
-      // Send welcome email
-      if (email) {
-        await mailService.sendWelcomeEmail(user);
-      }
+    // Game assets
+    this.pets = pets.map((pet) => (pet instanceof Pet ? pet : new Pet(pet)));
+    this.eggs = eggs.map((egg) =>
+      egg instanceof Egg ? egg : new Egg(egg.type, egg.ownerId)
+    );
+    this.techniques = techniques;
+    this.skins = skins;
+    this.balance = balance;
 
-      logger.info(`New user registered: ${username} (${email})`);
+    // Blockchain tracking
+    this.nftTokens = nftTokens;
+    this.transactions = transactions;
 
-      res.status(201).json({
-        success: true,
-        message: "User registered successfully",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            authMethod: user.authMethod,
-            level: user.level,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-            hasWallet: !!user.walletAddress,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      logger.error("Registration error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during registration",
-      });
+    // Progression
+    this.level = level;
+    this.experience = experience;
+    this.rank = rank;
+
+    // Timestamps
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
+    this.lastLogin = lastLogin;
+  }
+
+  /** --- 🔐 User Management --- **/
+
+  static async createWithWallet(username, email, password) {
+    // Generate new blockchain wallet
+    const wallet = Wallet.createRandom();
+
+    return new User({
+      username,
+      email,
+      passwordHash: await this.hashPassword(password), // Implement proper hashing
+      walletAddress: wallet.address,
+      privateKey: wallet.privateKey, // ⚠️ Only for demo - use secure key management
+    });
+  }
+
+  static hashPassword(password) {
+    // Implement proper password hashing (bcrypt, etc.)
+    return Promise.resolve(`hashed_${password}`); // Placeholder
+  }
+
+  verifyPassword(password) {
+    return this.passwordHash === `hashed_${password}`; // Placeholder
+  }
+
+  /** --- 🎮 Game Functions --- **/
+
+  addPet(pet) {
+    if (!(pet instanceof Pet)) {
+      throw new Error("Must be a Pet instance");
     }
-  },
+    pet.ownerId = this.id;
+    this.pets.push(pet);
+    this.updatedAt = new Date();
+  }
 
-  // Email/password login
-  async login(req, res) {
-    try {
-      const { email, password } = req.body;
+  removePet(petId) {
+    this.pets = this.pets.filter((pet) => pet.id !== petId);
+    this.updatedAt = new Date();
+  }
 
-      // Find user by email
-      const user = await User.findByEmail(email);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "No account found with this email",
-        });
-      }
-
-      // Check password
-      if (
-        !user.password ||
-        !(await user.correctPassword(password, user.password))
-      ) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid password",
-        });
-      }
-
-      // Generate JWT token
-      const token = generateToken({
-        userId: user._id,
-        email: user.email,
-        authMethod: user.authMethod,
-      });
-
-      // Update last login
-      user.lastLogin = new Date();
-      await user.save();
-
-      logger.info(`User logged in: ${user.username} (${email})`);
-
-      res.json({
-        success: true,
-        message: "Login successful",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            authMethod: user.authMethod,
-            level: user.level,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-            experience: user.experience,
-            hasWallet: !!user.walletAddress,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      logger.error("Login error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during login",
-      });
+  addEgg(egg) {
+    if (!(egg instanceof Egg)) {
+      throw new Error("Must be an Egg instance");
     }
-  },
+    egg.ownerId = this.id;
+    this.eggs.push(egg);
+    this.updatedAt = new Date();
+  }
 
-  // Connect wallet to existing account
-  async connectWallet(req, res) {
-    try {
-      const { walletAddress, signature } = req.body;
-      const user = req.user;
-
-      // Check if wallet is already connected to another account
-      const existingWalletUser = await User.findByWallet(walletAddress);
-      if (existingWalletUser) {
-        return res.status(400).json({
-          success: false,
-          message: "Wallet already connected to another account",
-        });
-      }
-
-      // Verify signature (in real implementation)
-      if (signature) {
-        const message = `Connect wallet to PetVerse - Nonce: ${generateNonce()}`;
-        const isValid = verifyWalletSignature(
-          walletAddress,
-          message,
-          signature
-        );
-
-        if (!isValid) {
-          return res.status(401).json({
-            success: false,
-            message: "Invalid signature",
-          });
-        }
-      }
-
-      // Update user with wallet
-      user.walletAddress = walletAddress.toLowerCase();
-      if (user.authMethod === "email") {
-        user.authMethod = "both"; // Can use both email and wallet
-      }
-
-      await user.save();
-
-      logger.info(
-        `Wallet connected: ${walletAddress} to user ${user.username}`
-      );
-
-      res.json({
-        success: true,
-        message: "Wallet connected successfully",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            walletAddress: user.walletAddress,
-            hasWallet: true,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Connect wallet error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during wallet connection",
-      });
+  hatchEgg(eggIndex) {
+    if (eggIndex >= this.eggs.length) {
+      throw new Error("Invalid egg index");
     }
-  },
 
-  // Wallet-only registration (for users who prefer wallet-first)
-  async walletRegister(req, res) {
-    try {
-      const { walletAddress, username, signature } = req.body;
-
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [{ walletAddress: walletAddress.toLowerCase() }, { username }],
-      });
-
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message:
-            existingUser.walletAddress === walletAddress.toLowerCase()
-              ? "Wallet already registered"
-              : "Username already taken",
-        });
-      }
-
-      // Verify signature (in real implementation)
-      if (signature) {
-        const message = `Register to PetVerse - Nonce: ${generateNonce()}`;
-        const isValid = verifyWalletSignature(
-          walletAddress,
-          message,
-          signature
-        );
-
-        if (!isValid) {
-          return res.status(401).json({
-            success: false,
-            message: "Invalid signature",
-          });
-        }
-      }
-
-      // Create new user
-      const user = new User({
-        authMethod: "wallet",
-        walletAddress: walletAddress.toLowerCase(),
-        username,
-        // Free starting resources
-        coins: 1000,
-        freeRolls: 3,
-      });
-
-      await user.save();
-
-      // Generate JWT token
-      const token = generateToken({
-        userId: user._id,
-        walletAddress: user.walletAddress,
-        authMethod: user.authMethod,
-      });
-
-      logger.info(`New wallet user registered: ${username} (${walletAddress})`);
-
-      res.status(201).json({
-        success: true,
-        message: "User registered successfully with wallet",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            walletAddress: user.walletAddress,
-            authMethod: user.authMethod,
-            level: user.level,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      logger.error("Wallet registration error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during wallet registration",
-      });
+    const egg = this.eggs[eggIndex];
+    if (egg.isHatched) {
+      throw new Error("Egg already hatched");
     }
-  },
 
-  // Wallet login
-  async walletLogin(req, res) {
-    try {
-      const { walletAddress, signature } = req.body;
+    const result = egg.hatch();
 
-      // Find user by wallet address
-      const user = await User.findByWallet(walletAddress);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "Wallet not registered. Please sign up first.",
-        });
-      }
-
-      // Verify signature (in real implementation)
-      if (signature) {
-        const message = `Login to PetVerse - Nonce: ${generateNonce()}`;
-        const isValid = verifyWalletSignature(
-          walletAddress,
-          message,
-          signature
-        );
-
-        if (!isValid) {
-          return res.status(401).json({
-            success: false,
-            message: "Invalid signature",
-          });
-        }
-      }
-
-      // Generate JWT token
-      const token = generateToken({
-        userId: user._id,
-        walletAddress: user.walletAddress,
-        authMethod: user.authMethod,
-      });
-
-      // Update last login
-      user.lastLogin = new Date();
-      await user.save();
-
-      logger.info(
-        `User logged in via wallet: ${user.username} (${walletAddress})`
-      );
-
-      res.json({
-        success: true,
-        message: "Login successful",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            walletAddress: user.walletAddress,
-            authMethod: user.authMethod,
-            level: user.level,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-            experience: user.experience,
-            email: user.email,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      logger.error("Wallet login error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during wallet login",
-      });
+    if (result instanceof Pet) {
+      this.addPet(result);
+    } else if (result.type === "Technique") {
+      this.techniques.push(result);
+    } else if (result.type === "Cosmetic") {
+      this.skins.push(result);
     }
-  },
 
-  // Guest login (no authentication required)
-  async guestLogin(req, res) {
-    try {
-      const { username } = req.body;
+    // Remove the hatched egg
+    this.eggs.splice(eggIndex, 1);
+    this.updatedAt = new Date();
 
-      // Generate a temporary identifier for guest users
-      const guestId = `guest_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+    return result;
+  }
 
-      // Check if username is available
-      const existingUser = await User.findOne({ username });
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: "Username already taken",
-        });
-      }
+  /** --- 💰 Economy --- **/
 
-      // Create guest user
-      const user = new User({
-        authMethod: "guest",
-        username,
-        isGuest: true,
-        coins: 500, // Less coins for guest users
-        freeRolls: 1,
-      });
+  addBalance(amount) {
+    this.balance += amount;
+    this.updatedAt = new Date();
+  }
 
-      await user.save();
-
-      // Generate JWT token (shorter expiry for guest users)
-      const token = generateToken(
-        {
-          userId: user._id,
-          authMethod: user.authMethod,
-          isGuest: true,
-        },
-        "24h"
-      ); // 24 hour expiry for guests
-
-      logger.info(`Guest user created: ${username}`);
-
-      res.status(201).json({
-        success: true,
-        message: "Guest session started",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            isGuest: true,
-            authMethod: user.authMethod,
-            level: user.level,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-          },
-          token,
-        },
-      });
-    } catch (error) {
-      logger.error("Guest login error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during guest login",
-      });
+  deductBalance(amount) {
+    if (this.balance < amount) {
+      throw new Error("Insufficient balance");
     }
-  },
+    this.balance -= amount;
+    this.updatedAt = new Date();
+  }
 
-  // Get user profile
-  async getProfile(req, res) {
-    try {
-      const user = await User.findById(req.user._id)
-        .select("-password -__v")
-        .populate("ownedPets", "name tier type level stats")
-        .populate("ownedEggs", "eggType rarity isHatched");
+  /** --- 🔗 Blockchain Integration --- **/
 
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
+  addTransaction(transaction) {
+    this.transactions.push({
+      ...transaction,
+      timestamp: new Date(),
+    });
+    this.updatedAt = new Date();
+  }
 
-      res.json({
-        success: true,
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            walletAddress: user.walletAddress,
-            authMethod: user.authMethod,
-            isGuest: user.isGuest,
-            level: user.level,
-            experience: user.experience,
-            coins: user.coins,
-            freeRolls: user.freeRolls,
-            battlesWon: user.battlesWon,
-            battlesLost: user.battlesLost,
-            petsHatched: user.petsHatched,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
-            ownedPets: user.ownedPets,
-            ownedEggs: user.ownedEggs,
-            preferences: user.preferences,
-            lastLogin: user.lastLogin,
-            createdAt: user.createdAt,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Get profile error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
+  addNFTToken(tokenId) {
+    if (!this.nftTokens.includes(tokenId)) {
+      this.nftTokens.push(tokenId);
+      this.updatedAt = new Date();
     }
-  },
+  }
 
-  // Update user profile
-  async updateProfile(req, res) {
-    try {
-      const { username, email, preferences } = req.body;
-      const user = req.user;
+  removeNFTToken(tokenId) {
+    this.nftTokens = this.nftTokens.filter((id) => id !== tokenId);
+    this.updatedAt = new Date();
+  }
 
-      // Check if username is available (if changing)
-      if (username && username !== user.username) {
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-          return res.status(400).json({
-            success: false,
-            message: "Username already taken",
-          });
-        }
-        user.username = username;
-      }
+  /** --- 🔍 Utility --- **/
 
-      // Update email if provided
-      if (email !== undefined) {
-        user.email = email;
-      }
-
-      // Update preferences if provided
-      if (preferences) {
-        user.preferences = { ...user.preferences, ...preferences };
-      }
-
-      await user.save();
-
-      res.json({
-        success: true,
-        message: "Profile updated successfully",
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            preferences: user.preferences,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Update profile error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-
-  // Refresh token
-  async refreshToken(req, res) {
-    try {
-      const user = req.user;
-
-      // Generate new token
-      const token = generateToken(
-        {
-          userId: user._id,
-          email: user.email,
-          walletAddress: user.walletAddress,
-          authMethod: user.authMethod,
-          isGuest: user.isGuest,
-        },
-        user.isGuest ? "24h" : "7d"
-      );
-
-      res.json({
-        success: true,
-        data: { token },
-      });
-    } catch (error) {
-      logger.error("Refresh token error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-};
+  toJSON() {
+    return {
+      id: this.id,
+      username: this.username,
+      email: this.email,
+      walletAddress: this.walletAddress,
+      // Don't expose private key in JSON output!
+      pets: this.pets.map((pet) => pet.toJSON()),
+      eggs: this.eggs.map((egg) => ({
+        type: egg.type,
+        ownerId: egg.ownerId,
+        isHatched: egg.isHatched,
+        contents: egg.contents,
+      })),
+      techniques: this.techniques,
+      skins: this.skins,
+      balance: this.balance,
+      nftTokens: this.nftTokens,
+      transactions: this.transactions,
+      level: this.level,
+      experience: this.experience,
+      rank: this.rank,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      lastLogin: this.lastLogin,
+    };
+  }
+}

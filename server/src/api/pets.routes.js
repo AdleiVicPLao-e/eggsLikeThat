@@ -1,7 +1,8 @@
+// routes/pet.route.js
 import express from "express";
 import { PetController } from "../controllers/PetController.js";
 import { validate } from "../utils/validators.js";
-import { petUpgradeSchema } from "../utils/validators.js";
+import { petUpgradeSchema, petTrainSchema } from "../utils/validators.js";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
 
@@ -19,6 +20,14 @@ router.get("/:petId", PetController.getPetDetails);
 // Upgrade pet
 router.post("/:petId/upgrade", gameActionLimiter, PetController.upgradePet);
 
+// Train pet
+router.post(
+  "/:petId/train",
+  gameActionLimiter,
+  validate(petTrainSchema),
+  PetController.trainPet
+);
+
 // Fuse pets
 router.post(
   "/fuse",
@@ -33,5 +42,11 @@ router.patch(
   gameActionLimiter,
   PetController.toggleFavorite
 );
+
+// Get fusion calculator
+router.get("/fusion/calculator", PetController.getFusionCalculator);
+
+// Get pet statistics
+router.get("/stats/overview", PetController.getPetStats);
 
 export default router;

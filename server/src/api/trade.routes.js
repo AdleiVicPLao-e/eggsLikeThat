@@ -1,9 +1,11 @@
+// routes/trade.route.js
 import express from "express";
 import { TradeController } from "../controllers/TradeController.js";
 import { validate } from "../utils/validators.js";
 import {
   tradeCreationSchema,
   offerCreationSchema,
+  counterOfferSchema,
 } from "../utils/validators.js";
 import { authenticate, requireWallet } from "../middleware/authMiddleware.js";
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
@@ -79,6 +81,7 @@ router.post(
   "/offer/:offerId/counter",
   requireWallet,
   gameActionLimiter,
+  validate(counterOfferSchema),
   TradeController.counterOffer
 );
 
@@ -88,5 +91,10 @@ router.delete(
   gameActionLimiter,
   TradeController.cancelOffer
 );
+
+// Additional trade routes
+router.get("/analytics/overview", TradeController.getTradeAnalytics);
+router.get("/search", TradeController.searchListings);
+router.get("/categories", TradeController.getTradeCategories);
 
 export default router;
