@@ -16,8 +16,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import PetCard from "../components/Pets/PetCard";
-import { formatTier, formatType, formatCurrency } from "../utils/rarity";
-import { TIERS, TYPES } from "../utils/constants";
+import { PET_RARITIES } from "../utils/constants";
 
 const Home = () => {
   const {
@@ -27,7 +26,6 @@ const Home = () => {
     showAuthModal,
     setShowAuthModal,
     setAuthMode,
-    connectWallet,
   } = useUser();
   const { pets, eggs, lastSync } = useGame();
   const navigate = useNavigate();
@@ -54,19 +52,6 @@ const Home = () => {
     }
   };
 
-  const handleConnectWallet = async () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      setAuthMode("register");
-      return;
-    }
-
-    const result = await connectWallet();
-    if (result.success) {
-      alert("Wallet connected successfully!");
-    }
-  };
-
   const handleCreateAccount = () => {
     setShowAuthModal(true);
     setAuthMode("register");
@@ -82,17 +67,128 @@ const Home = () => {
     setAuthMode("guest");
   };
 
+  // Format currency for display
+  const formatCurrency = (amount, currency = "coins") => {
+    if (currency === "ETH" || currency === "MATIC") {
+      return `${parseFloat(amount).toFixed(4)} ${currency}`;
+    }
+    return amount.toLocaleString();
+  };
+
+  // Format tier for display
+  const formatTier = (tier) => {
+    const tierStyles = {
+      [PET_RARITIES.COMMON]: {
+        emoji: "⚪",
+        bgColor: "bg-gray-500",
+        textColor: "text-gray-300",
+        name: "Common",
+      },
+      [PET_RARITIES.UNCOMMON]: {
+        emoji: "🟢",
+        bgColor: "bg-green-500",
+        textColor: "text-green-300",
+        name: "Uncommon",
+      },
+      [PET_RARITIES.RARE]: {
+        emoji: "🔵",
+        bgColor: "bg-blue-500",
+        textColor: "text-blue-300",
+        name: "Rare",
+      },
+      [PET_RARITIES.EPIC]: {
+        emoji: "🟣",
+        bgColor: "bg-purple-500",
+        textColor: "text-purple-300",
+        name: "Epic",
+      },
+      [PET_RARITIES.LEGENDARY]: {
+        emoji: "🟡",
+        bgColor: "bg-yellow-500",
+        textColor: "text-yellow-300",
+        name: "Legendary",
+      },
+      [PET_RARITIES.MYTHIC]: {
+        emoji: "🔴",
+        bgColor: "bg-red-500",
+        textColor: "text-red-300",
+        name: "Mythic",
+      },
+      [PET_RARITIES.CELESTIAL]: {
+        emoji: "⚡",
+        bgColor: "bg-indigo-500",
+        textColor: "text-indigo-300",
+        name: "Celestial",
+      },
+      [PET_RARITIES.EXOTIC]: {
+        emoji: "🌈",
+        bgColor: "bg-pink-500",
+        textColor: "text-pink-300",
+        name: "Exotic",
+      },
+      [PET_RARITIES.ULTIMATE]: {
+        emoji: "👑",
+        bgColor: "bg-orange-500",
+        textColor: "text-orange-300",
+        name: "Ultimate",
+      },
+      [PET_RARITIES.GODLY]: {
+        emoji: "✨",
+        bgColor: "bg-cyan-500",
+        textColor: "text-cyan-300",
+        name: "Godly",
+      },
+    };
+    return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
+  };
+
+  // Format type for display
+  const formatType = (type) => {
+    const typeNames = {
+      FIRE: { name: "Fire", emoji: "🔥", bgColor: "bg-red-500" },
+      WATER: { name: "Water", emoji: "💧", bgColor: "bg-blue-500" },
+      EARTH: { name: "Earth", emoji: "🌿", bgColor: "bg-green-500" },
+      AIR: { name: "Air", emoji: "💨", bgColor: "bg-gray-400" },
+      ELECTRIC: { name: "Electric", emoji: "⚡", bgColor: "bg-yellow-500" },
+      DRAGON: { name: "Dragon", emoji: "🐉", bgColor: "bg-purple-500" },
+      PHOENIX: { name: "Phoenix", emoji: "🔥", bgColor: "bg-orange-500" },
+      UNICORN: { name: "Unicorn", emoji: "🦄", bgColor: "bg-pink-400" },
+      GRIFFIN: { name: "Griffin", emoji: "🦅", bgColor: "bg-yellow-600" },
+    };
+    return (
+      typeNames[type] || { name: type, emoji: "🐾", bgColor: "bg-gray-500" }
+    );
+  };
+
   const recentPets = pets.slice(-3).reverse();
+
+  // Get tier ID for rarity comparison
+  const getTierId = (tier) => {
+    const tierIds = {
+      [PET_RARITIES.COMMON]: 1,
+      [PET_RARITIES.UNCOMMON]: 2,
+      [PET_RARITIES.RARE]: 3,
+      [PET_RARITIES.EPIC]: 4,
+      [PET_RARITIES.LEGENDARY]: 5,
+      [PET_RARITIES.MYTHIC]: 6,
+      [PET_RARITIES.CELESTIAL]: 7,
+      [PET_RARITIES.EXOTIC]: 8,
+      [PET_RARITIES.ULTIMATE]: 9,
+      [PET_RARITIES.GODLY]: 10,
+    };
+    return tierIds[tier] || 0;
+  };
+
   const stats = {
     totalPets: pets.length,
     totalEggs: eggs.length,
     highestTier: pets.reduce((highest, pet) => {
-      const tierValue = TIERS[pet.tier]?.id || 0;
-      const highestValue = TIERS[highest]?.id || 0;
+      const tierValue = getTierId(pet.tier);
+      const highestValue = getTierId(highest);
       return tierValue > highestValue ? pet.tier : highest;
-    }, "COMMON"),
+    }, PET_RARITIES.COMMON),
     totalValue: pets.reduce((sum, pet) => {
-      const tierValue = TIERS[pet.tier]?.id || 0;
+      const tierValue = getTierId(pet.tier);
       return sum + tierValue * 100;
     }, 0),
   };
@@ -121,14 +217,13 @@ const Home = () => {
       path: "/battle",
       requiresAuth: true,
       status: isAuthenticated
-        ? `Level ${user?.level || 1} - ${user?.battlesWon || 0} wins`
+        ? `Level ${user?.level || 1}`
         : "Create account to battle",
     },
     {
       icon: Users,
       title: "Marketplace",
-      description:
-        "Buy, sell, and trade pets with other players. Secure blockchain transactions.",
+      description: "Buy, sell, and trade pets with other players.",
       color: "from-green-500 to-blue-500",
       path: "/marketplace",
       requiresAuth: true,
@@ -213,7 +308,14 @@ const Home = () => {
       title: "Connect Wallet",
       description:
         "Use your crypto wallet to access blockchain features and trading",
-      action: handleConnectWallet,
+      action: () => {
+        if (!isAuthenticated) {
+          setShowAuthModal(true);
+          setAuthMode("register");
+          return;
+        }
+        navigate("/profile");
+      },
       color: "from-orange-500 to-red-600",
     },
   ];
@@ -357,7 +459,7 @@ const Home = () => {
             {!user?.walletAddress && (
               <div className="max-w-md mx-auto">
                 <button
-                  onClick={handleConnectWallet}
+                  onClick={() => navigate("/profile")}
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center space-x-2"
                 >
                   <Shield className="w-5 h-5" />
@@ -457,20 +559,23 @@ const Home = () => {
                 Pet Rarity Distribution
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {Object.entries(TIERS).map(([tier, data]) => {
+                {Object.values(PET_RARITIES).map((tier) => {
                   const count = pets.filter((pet) => pet.tier === tier).length;
                   const percentage =
                     pets.length > 0 ? (count / pets.length) * 100 : 0;
+                  const tierData = formatTier(tier);
 
                   return (
                     <div key={tier} className="text-center">
                       <div
-                        className={`w-16 h-16 rounded-full ${data.bgColor} flex items-center justify-center mx-auto mb-2`}
+                        className={`w-16 h-16 rounded-full ${tierData.bgColor} flex items-center justify-center mx-auto mb-2`}
                       >
-                        <span className="text-2xl">{data.emoji}</span>
+                        <span className="text-2xl">{tierData.emoji}</span>
                       </div>
                       <div className="text-white font-bold">{count}</div>
-                      <div className="text-gray-400 text-sm">{data.name}</div>
+                      <div className="text-gray-400 text-sm">
+                        {tierData.name}
+                      </div>
                       <div className="text-gray-500 text-xs">
                         {percentage.toFixed(1)}%
                       </div>
@@ -486,21 +591,64 @@ const Home = () => {
                 Pet Type Distribution
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {Object.entries(TYPES).map(([type, data]) => {
-                  const count = pets.filter((pet) => pet.type === type).length;
-
-                  return (
-                    <div key={type} className="text-center">
-                      <div
-                        className={`w-12 h-12 rounded-full ${data.bgColor} flex items-center justify-center mx-auto mb-2`}
-                      >
-                        <span className="text-xl">{data.emoji}</span>
+                {Object.keys(formatType("FIRE")).length > 0 && (
+                  <>
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">🔥</span>
                       </div>
-                      <div className="text-white font-bold">{count}</div>
-                      <div className="text-gray-400 text-sm">{data.name}</div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "FIRE").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Fire</div>
                     </div>
-                  );
-                })}
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">💧</span>
+                      </div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "WATER").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Water</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">🌿</span>
+                      </div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "EARTH").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Earth</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-gray-400 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">💨</span>
+                      </div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "AIR").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Air</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-yellow-500 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">⚡</span>
+                      </div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "ELECTRIC").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Electric</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center mx-auto mb-2">
+                        <span className="text-xl">🐉</span>
+                      </div>
+                      <div className="text-white font-bold">
+                        {pets.filter((pet) => pet.type === "DRAGON").length}
+                      </div>
+                      <div className="text-gray-400 text-sm">Dragon</div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

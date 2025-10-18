@@ -1,15 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
-import { blockchainService } from "../services/blockchain.jsx";
-import { useGame } from "../context/GameContext.jsx";
+// client/src/hooks/useWallet.jsx
+import { useState, useEffect } from "react";
+import { gameAPI } from "../services/api.js";
 
 export const useWallet = () => {
   const [account, setAccount] = useState(null);
-  const [balance, setBalance] = useState("0");
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
-  const [network, setNetwork] = useState(null);
-
-  const { updateUser } = useGame();
+  const [userProfile, setUserProfile] = useState(null);
 
   // Check if wallet is connected on mount
   useEffect(() => {
@@ -29,7 +26,6 @@ export const useWallet = () => {
         );
         window.ethereum.removeListener("chainChanged", handleChainChanged);
       }
-      blockchainService.removeAllListeners();
     };
   }, []);
 
@@ -41,23 +37,27 @@ export const useWallet = () => {
         });
 
         if (accounts.length > 0) {
-          const address = accounts[0];
-          setAccount(address);
-          await updateBalance(address);
-          await updateNetwork();
-
-          // Initialize blockchain service
-          await blockchainService.init();
-          const signer = await blockchainService.provider.getSigner();
-          blockchainService.signer = signer;
-          blockchainService.isConnected = true;
-
-          // Update user context
-          updateUser({ walletAddress: address, isGuest: false });
+          setAccount(accounts[0]);
+          // Check if user is already logged in with this wallet
+          await checkExistingSession();
         }
       }
     } catch (error) {
       console.error("Error checking wallet connection:", error);
+    }
+  };
+
+  const checkExistingSession = async () => {
+    try {
+      const token = localStorage.getItem("petverse_token");
+      if (token) {
+        const response = await gameAPI.auth.getProfile();
+        setUserProfile(response.data);
+      }
+    } catch (error) {
+      // Token might be expired, clear it
+      localStorage.removeItem("petverse_token");
+      localStorage.removeItem("petverse_user");
     }
   };
 
@@ -66,123 +66,182 @@ export const useWallet = () => {
     setError(null);
 
     try {
-      const result = await blockchainService.connectWallet();
-
-      if (result.success) {
-        setAccount(result.address);
-        await updateBalance(result.address);
-        await updateNetwork();
-
-        // Update user context
-        updateUser({
-          walletAddress: result.address,
-          isGuest: false,
-          network: result.network,
-        });
-
-        // Store connection in localStorage
-        localStorage.setItem("petverse_wallet_connected", "true");
-      } else {
-        setError(result.error);
+      if (!window.ethereum) {
+        throw new Error("MetaMask is not installed");
       }
+
+      // Request account access
+      const accounts = await window.ethereum.request({
+        method: "eth_requestAccounts",
+      });
+
+      if (accounts.length === 0) {
+        throw new Error("No accounts found");
+      }
+
+      const address = accounts[0];
+      setAccount(address);
+
+      // Sign message to verify ownership
+      const message = `Welcome to PetVerse! Please sign this message to verify your wallet ownership. Address: ${address}`;
+      const signature = await signMessage(message);
+
+      return {
+        success: true,
+        address,
+        signature,
+        message,
+      };
     } catch (error) {
       setError(error.message);
+      console.error("Wallet connection error:", error);
+      return {
+        success: false,
+        error: error.message,
+      };
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const disconnect = () => {
-    setAccount(null);
-    setBalance("0");
-    setNetwork(null);
-    setError(null);
-
-    blockchainService.isConnected = false;
-    blockchainService.signer = null;
-
-    // Update user context
-    updateUser({ walletAddress: null, isGuest: true });
-
-    // Remove from localStorage
-    localStorage.removeItem("petverse_wallet_connected");
-  };
-
-  const updateBalance = async (address) => {
+  const registerWithWallet = async (userData = {}) => {
     try {
-      const bal = await blockchainService.getBalance(address);
-      setBalance(bal);
-    } catch (error) {
-      console.error("Error updating balance:", error);
-    }
-  };
-
-  const updateNetwork = async () => {
-    try {
-      const net = await blockchainService.getNetwork();
-      setNetwork(net);
-    } catch (error) {
-      console.error("Error updating network:", error);
-    }
-  };
-
-  const switchNetwork = async (chainId) => {
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: `0x${chainId.toString(16)}` }],
-      });
-    } catch (error) {
-      console.error("Error switching network:", error);
-
-      // If network not added, try to add it
-      if (error.code === 4902) {
-        try {
-          await addNetwork(chainId);
-        } catch (addError) {
-          throw new Error(`Failed to add network: ${addError.message}`);
-        }
+      if (!account) {
+        throw new Error("No wallet connected");
       }
 
-      throw error;
+      const connectionResult = await connect();
+      if (!connectionResult.success) {
+        throw new Error(connectionResult.error);
+      }
+
+      const { address, signature, message } = connectionResult;
+
+      const registerData = {
+        walletAddress: address,
+        signature,
+        message,
+        ...userData,
+      };
+
+      const response = await gameAPI.auth.walletRegister(registerData);
+
+      if (response.data.token) {
+        localStorage.setItem("petverse_token", response.data.token);
+        localStorage.setItem(
+          "petverse_user",
+          JSON.stringify(response.data.user)
+        );
+        setUserProfile(response.data.user);
+      }
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      setError(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
     }
   };
 
-  const addNetwork = async (chainId) => {
-    const networkConfigs = {
-      137: {
-        chainId: "0x89",
-        chainName: "Polygon Mainnet",
-        nativeCurrency: {
-          name: "MATIC",
-          symbol: "MATIC",
-          decimals: 18,
-        },
-        rpcUrls: ["https://polygon-rpc.com/"],
-        blockExplorerUrls: ["https://polygonscan.com/"],
-      },
-      80001: {
-        chainId: "0x13881",
-        chainName: "Polygon Mumbai Testnet",
-        nativeCurrency: {
-          name: "MATIC",
-          symbol: "MATIC",
-          decimals: 18,
-        },
-        rpcUrls: ["https://rpc-mumbai.maticvigil.com/"],
-        blockExplorerUrls: ["https://mumbai.polygonscan.com/"],
-      },
-    };
+  const loginWithWallet = async () => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
 
-    const config = networkConfigs[chainId];
-    if (!config) {
-      throw new Error(`Unsupported network: ${chainId}`);
+      const connectionResult = await connect();
+      if (!connectionResult.success) {
+        throw new Error(connectionResult.error);
+      }
+
+      const { address, signature, message } = connectionResult;
+
+      const loginData = {
+        walletAddress: address,
+        signature,
+        message,
+      };
+
+      const response = await gameAPI.auth.walletLogin(loginData);
+
+      if (response.data.token) {
+        localStorage.setItem("petverse_token", response.data.token);
+        localStorage.setItem(
+          "petverse_user",
+          JSON.stringify(response.data.user)
+        );
+        setUserProfile(response.data.user);
+      }
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      setError(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
     }
+  };
 
-    await window.ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [config],
-    });
+  const connectWalletToAccount = async () => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
+
+      const connectionResult = await connect();
+      if (!connectionResult.success) {
+        throw new Error(connectionResult.error);
+      }
+
+      const { address, signature, message } = connectionResult;
+
+      const connectData = {
+        walletAddress: address,
+        signature,
+        message,
+      };
+
+      const response = await gameAPI.auth.connectWallet(connectData);
+
+      if (response.data.user) {
+        setUserProfile(response.data.user);
+        localStorage.setItem(
+          "petverse_user",
+          JSON.stringify(response.data.user)
+        );
+      }
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message;
+      setError(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  };
+
+  const disconnect = () => {
+    setAccount(null);
+    setError(null);
+    setUserProfile(null);
+    localStorage.removeItem("petverse_token");
+    localStorage.removeItem("petverse_user");
   };
 
   const handleAccountsChanged = (accounts) => {
@@ -191,8 +250,8 @@ export const useWallet = () => {
       disconnect();
     } else {
       setAccount(accounts[0]);
-      updateBalance(accounts[0]);
-      updateUser({ walletAddress: accounts[0] });
+      // Check if the new account has an existing session
+      checkExistingSession();
     }
   };
 
@@ -217,18 +276,69 @@ export const useWallet = () => {
     }
   };
 
+  const switchNetwork = async (chainId = "0x1") => {
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: chainId }],
+      });
+      return { success: true };
+    } catch (error) {
+      setError(`Failed to switch network: ${error.message}`);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  const getWalletBalance = async () => {
+    try {
+      if (!account) {
+        throw new Error("No account connected");
+      }
+
+      const balance = await window.ethereum.request({
+        method: "eth_getBalance",
+        params: [account, "latest"],
+      });
+
+      return {
+        success: true,
+        balance: parseInt(balance, 16) / 1e18, // Convert from wei to ETH
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
   return {
+    // State
     account,
-    balance,
-    network,
     isConnecting,
     error,
+    userProfile,
+
+    // Connection methods
     connect,
     disconnect,
-    switchNetwork,
-    updateBalance,
+
+    // Authentication methods
+    registerWithWallet,
+    loginWithWallet,
+    connectWalletToAccount,
+
+    // Utility methods
     signMessage,
+    switchNetwork,
+    getWalletBalance,
+
+    // Status
     isConnected: !!account,
-    blockchainService,
+    isMetaMaskInstalled: !!window.ethereum,
+    isLoggedIn: !!userProfile && !!localStorage.getItem("petverse_token"),
   };
 };

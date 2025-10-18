@@ -1,4 +1,6 @@
+// client/src/context/UserContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { gameAPI } from "../services/api.js";
 
 const UserContext = createContext();
 
@@ -14,34 +16,31 @@ export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode, setAuthMode] = useState("login"); // 'login' or 'register'
+  const [authMode, setAuthMode] = useState("login");
 
   // Check for existing session on app load
   useEffect(() => {
     const checkExistingSession = async () => {
       setIsLoading(true);
       try {
-        const savedUser = localStorage.getItem("gameUser");
-        const sessionToken = localStorage.getItem("sessionToken");
+        const token = localStorage.getItem("petverse_token");
+        const savedUser = localStorage.getItem("petverse_user");
 
-        if (savedUser && sessionToken) {
-          // Verify session with backend
-          const response = await fetch("/api/auth/verify", {
-            headers: {
-              Authorization: `Bearer ${sessionToken}`,
-            },
-          });
-
-          if (response.ok) {
-            setUser(JSON.parse(savedUser));
+        if (token && savedUser) {
+          // Verify session by getting profile
+          const response = await gameAPI.auth.getProfile();
+          if (response.data.success) {
+            setUser(response.data.data.user);
           } else {
             // Invalid session, clear storage
-            localStorage.removeItem("gameUser");
-            localStorage.removeItem("sessionToken");
+            localStorage.removeItem("petverse_token");
+            localStorage.removeItem("petverse_user");
           }
         }
       } catch (error) {
         console.error("Session check failed:", error);
+        localStorage.removeItem("petverse_token");
+        localStorage.removeItem("petverse_user");
       } finally {
         setIsLoading(false);
       }
@@ -54,31 +53,27 @@ export const UserProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(userData),
-      });
+      const response = await gameAPI.auth.register(userData);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Registration failed");
+      if (response.data.success) {
+        const { user: newUser, token } = response.data.data;
+        
+        // Store user data and token
+        localStorage.setItem("petverse_user", JSON.stringify(newUser));
+        localStorage.setItem("petverse_token", token);
+
+        setUser(newUser);
+        setShowAuthModal(false);
+
+        return { success: true, user: newUser };
+      } else {
+        throw new Error(response.data.message || "Registration failed");
       }
-
-      const { user: newUser, token } = await response.json();
-
-      // Store user data and token
-      localStorage.setItem("gameUser", JSON.stringify(newUser));
-      localStorage.setItem("sessionToken", token);
-
-      setUser(newUser);
-      setShowAuthModal(false);
-
-      return { success: true, user: newUser };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.message || error.message 
+      };
     } finally {
       setIsLoading(false);
     }
@@ -88,31 +83,56 @@ export const UserProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credentials),
-      });
+      const response = await gameAPI.auth.login(credentials);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Login failed");
+      if (response.data.success) {
+        const { user: userData, token } = response.data.data;
+
+        // Store user data and token
+        localStorage.setItem("petverse_user", JSON.stringify(userData));
+        localStorage.setItem("petverse_token", token);
+
+        setUser(userData);
+        setShowAuthModal(false);
+
+        return { success: true, user: userData };
+      } else {
+        throw new Error(response.data.message || "Login failed");
       }
-
-      const { user: userData, token } = await response.json();
-
-      // Store user data and token
-      localStorage.setItem("gameUser", JSON.stringify(userData));
-      localStorage.setItem("sessionToken", token);
-
-      setUser(userData);
-      setShowAuthModal(false);
-
-      return { success: true, user: userData };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.message || error.message 
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Guest login
+  const guestLogin = async (username) => {
+    try {
+      setIsLoading(true);
+      const response = await gameAPI.auth.guestLogin(username);
+
+      if (response.data.success) {
+        const { user: userData, token } = response.data.data;
+
+        localStorage.setItem("petverse_user", JSON.stringify(userData));
+        localStorage.setItem("petverse_token", token);
+
+        setUser(userData);
+        setShowAuthModal(false);
+
+        return { success: true, user: userData };
+      } else {
+        throw new Error(response.data.message || "Guest login failed");
+      }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || error.message 
+      };
     } finally {
       setIsLoading(false);
     }
@@ -121,35 +141,29 @@ export const UserProvider = ({ children }) => {
   // Logout
   const logout = () => {
     setUser(null);
-    localStorage.removeItem("gameUser");
-    localStorage.removeItem("sessionToken");
-    // Optional: Call backend logout endpoint
+    localStorage.removeItem("petverse_user");
+    localStorage.removeItem("petverse_token");
   };
 
-  // Connect wallet (optional)
-  const connectWallet = async () => {
+  // Update user profile
+  const updateProfile = async (profileData) => {
     try {
-      // Mock wallet connection - replace with real implementation
-      const mockWallet = {
-        address: "0x" + Math.random().toString(16).slice(2, 42),
-        balance: "0.5 ETH",
-      };
-
-      const updatedUser = { ...user, wallet: mockWallet };
-      setUser(updatedUser);
-      localStorage.setItem("gameUser", JSON.stringify(updatedUser));
-
-      return { success: true, wallet: mockWallet };
+      const response = await gameAPI.auth.updateProfile(profileData);
+      
+      if (response.data.success) {
+        const updatedUser = response.data.data.user;
+        setUser(updatedUser);
+        localStorage.setItem("petverse_user", JSON.stringify(updatedUser));
+        return { success: true, user: updatedUser };
+      } else {
+        throw new Error(response.data.message || "Profile update failed");
+      }
     } catch (error) {
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.response?.data?.message || error.message 
+      };
     }
-  };
-
-  // Disconnect wallet
-  const disconnectWallet = () => {
-    const updatedUser = { ...user, wallet: null };
-    setUser(updatedUser);
-    localStorage.setItem("gameUser", JSON.stringify(updatedUser));
   };
 
   const value = {
@@ -160,7 +174,7 @@ export const UserProvider = ({ children }) => {
     // Authentication state
     isAuthenticated: !!user,
     isGuest: user?.isGuest || false,
-    hasWallet: !!user?.wallet,
+    hasWallet: !!user?.walletAddress,
 
     // Auth modal
     showAuthModal,
@@ -171,9 +185,9 @@ export const UserProvider = ({ children }) => {
     // Actions
     register,
     login,
+    guestLogin,
     logout,
-    connectWallet,
-    disconnectWallet,
+    updateProfile,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

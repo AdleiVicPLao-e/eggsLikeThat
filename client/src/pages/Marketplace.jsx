@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "../context/UserContext";
 import { useGame } from "../context/GameContext";
-import { useGameAPI } from "../hooks/useGameAPI";
-import { useBlockchain } from "../hooks/useBlockchain";
+import { useWallet } from "../hooks/useWallet";
 import Button from "../components/UI/Button";
 import ListingCard from "../components/Marketplace/ListingCard";
 import ListPetModal from "../components/Marketplace/ListPetModal";
@@ -15,18 +14,14 @@ import {
   Users,
   RefreshCw,
   Wallet,
-  AlertCircle,
-  Crown,
-  Zap,
 } from "lucide-react";
-import { formatCurrency, formatNumber } from "../utils/rarity";
-import { TIERS, TYPES } from "../utils/constants";
+import { PET_RARITIES, CURRENCIES } from "../utils/constants";
 
 const Marketplace = () => {
-  const { user, isAuthenticated, hasWallet, connectWallet } = useUser();
-  const { pets, coins, loadGameData } = useGame();
-  const { getListings, getMarketplaceStats, getUserListings } = useGameAPI();
-  const { blockchainService } = useBlockchain();
+  const { user, isAuthenticated } = useUser();
+  const { pets, coins, gameAPI } = useGame();
+  const { account, isConnected, connect, registerWithWallet, loginWithWallet } =
+    useWallet();
 
   const [listings, setListings] = useState([]);
   const [userListings, setUserListings] = useState([]);
@@ -48,7 +43,7 @@ const Marketplace = () => {
   });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState("browse"); // 'browse', 'my-listings', 'my-pets'
+  const [activeTab, setActiveTab] = useState("browse");
 
   // Load marketplace data
   useEffect(() => {
@@ -125,35 +120,38 @@ const Marketplace = () => {
 
     setLoading(true);
     try {
-      const [listingsResponse, statsResponse, userListingsResponse] =
-        await Promise.all([
-          getListings({ status: "listed", limit: 50 }),
-          getMarketplaceStats(),
-          hasWallet
-            ? getUserListings()
-            : Promise.resolve({ data: { listings: [] } }),
-        ]);
+      const [listingsResponse, userListingsResponse] = await Promise.all([
+        gameAPI.getListings({ status: "listed", limit: 50 }),
+        isConnected ? gameAPI.getUserListings() : { data: { listings: [] } },
+      ]);
 
-      if (listingsResponse?.data?.listings) {
+      if (listingsResponse?.success && listingsResponse.data?.listings) {
         setListings(listingsResponse.data.listings);
-      }
 
-      if (statsResponse?.data) {
+        // Calculate stats from listings
+        const totalListings = listingsResponse.data.listings.length;
+        const activeSellers = new Set(
+          listingsResponse.data.listings.map((l) => l.seller?.walletAddress)
+        ).size;
+        const totalVolume = listingsResponse.data.listings.reduce(
+          (sum, listing) => sum + parseFloat(listing.price || 0),
+          0
+        );
+        const averagePrice =
+          totalListings > 0 ? totalVolume / totalListings : 0;
+
         setStats({
-          totalListings: statsResponse.data.volume24h?.sales || 0,
-          activeSellers: statsResponse.data.participants?.sellers || 0,
-          volume24h: formatCurrency(
-            statsResponse.data.volume24h?.total || 0,
-            "ETH"
-          ),
-          averagePrice: formatCurrency(
-            statsResponse.data.volume24h?.average || 0,
-            "ETH"
-          ),
+          totalListings,
+          activeSellers,
+          volume24h: formatCurrency(totalVolume, "ETH"),
+          averagePrice: formatCurrency(averagePrice, "ETH"),
         });
       }
 
-      if (userListingsResponse?.data?.listings) {
+      if (
+        userListingsResponse?.success &&
+        userListingsResponse.data?.listings
+      ) {
         setUserListings(userListingsResponse.data.listings);
       }
     } catch (error) {
@@ -178,7 +176,7 @@ const Marketplace = () => {
         pet: {
           id: "market_1",
           name: "Golden Dragon",
-          tier: "LEGENDARY",
+          tier: PET_RARITIES.LEGENDARY,
           type: "FIRE",
           abilities: ["Flame Burst", "Fire Wall"],
           stats: { attack: 160, defense: 120, speed: 140, health: 200 },
@@ -198,7 +196,7 @@ const Marketplace = () => {
         pet: {
           id: "market_2",
           name: "Water Serpent",
-          tier: "EPIC",
+          tier: PET_RARITIES.EPIC,
           type: "WATER",
           abilities: ["Water Shield"],
           stats: { attack: 140, defense: 160, speed: 100, health: 180 },
@@ -218,7 +216,7 @@ const Marketplace = () => {
         pet: {
           id: "market_3",
           name: "Earth Golem",
-          tier: "RARE",
+          tier: PET_RARITIES.RARE,
           type: "EARTH",
           abilities: ["Earth Slam"],
           stats: { attack: 120, defense: 180, speed: 80, health: 220 },
@@ -238,7 +236,7 @@ const Marketplace = () => {
         pet: {
           id: "market_4",
           name: "Air Falcon",
-          tier: "UNCOMMON",
+          tier: PET_RARITIES.UNCOMMON,
           type: "AIR",
           abilities: ["Air Slash"],
           stats: { attack: 100, defense: 80, speed: 160, health: 140 },
@@ -259,11 +257,22 @@ const Marketplace = () => {
     });
   };
 
+  // Handle wallet connection
+  const handleConnectWallet = async () => {
+    const result = await connect();
+    if (result.success) {
+      const loginResult = await loginWithWallet();
+      if (!loginResult.success) {
+        await registerWithWallet({ username: `user_${account.slice(2, 8)}` });
+      }
+    }
+  };
+
   const handleListPet = (pet) => {
-    if (!hasWallet) {
+    if (!isConnected) {
       const connect = confirm("Connect your wallet to list pets for sale?");
       if (connect) {
-        connectWallet();
+        handleConnectWallet();
       }
       return;
     }
@@ -281,6 +290,76 @@ const Marketplace = () => {
     setRefreshing(true);
     await loadMarketplaceData();
     setRefreshing(false);
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount, currency = CURRENCIES.COINS) => {
+    if (currency === CURRENCIES.ETH || currency === CURRENCIES.MATIC) {
+      return `${parseFloat(amount).toFixed(4)} ${currency}`;
+    }
+    return amount.toLocaleString();
+  };
+
+  // Format number for display
+  const formatNumber = (num) => {
+    return num.toLocaleString();
+  };
+
+  // Format tier for display
+  const formatTier = (tier) => {
+    const tierStyles = {
+      [PET_RARITIES.COMMON]: {
+        emoji: "⚪",
+        bgColor: "bg-gray-500",
+        textColor: "text-gray-300",
+      },
+      [PET_RARITIES.UNCOMMON]: {
+        emoji: "🟢",
+        bgColor: "bg-green-500",
+        textColor: "text-green-300",
+      },
+      [PET_RARITIES.RARE]: {
+        emoji: "🔵",
+        bgColor: "bg-blue-500",
+        textColor: "text-blue-300",
+      },
+      [PET_RARITIES.EPIC]: {
+        emoji: "🟣",
+        bgColor: "bg-purple-500",
+        textColor: "text-purple-300",
+      },
+      [PET_RARITIES.LEGENDARY]: {
+        emoji: "🟡",
+        bgColor: "bg-yellow-500",
+        textColor: "text-yellow-300",
+      },
+      [PET_RARITIES.MYTHIC]: {
+        emoji: "🔴",
+        bgColor: "bg-red-500",
+        textColor: "text-red-300",
+      },
+      [PET_RARITIES.CELESTIAL]: {
+        emoji: "⚡",
+        bgColor: "bg-indigo-500",
+        textColor: "text-indigo-300",
+      },
+      [PET_RARITIES.EXOTIC]: {
+        emoji: "🌈",
+        bgColor: "bg-pink-500",
+        textColor: "text-pink-300",
+      },
+      [PET_RARITIES.ULTIMATE]: {
+        emoji: "👑",
+        bgColor: "bg-orange-500",
+        textColor: "text-orange-300",
+      },
+      [PET_RARITIES.GODLY]: {
+        emoji: "✨",
+        bgColor: "bg-cyan-500",
+        textColor: "text-cyan-300",
+      },
+    };
+    return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
   };
 
   const statCards = [
@@ -312,7 +391,7 @@ const Marketplace = () => {
 
   const canListPet = (pet) => {
     return (
-      hasWallet &&
+      isConnected &&
       pet.tokenId &&
       !userListings.some(
         (listing) => listing.pet?.id === pet.id && listing.status === "listed"
@@ -321,7 +400,7 @@ const Marketplace = () => {
   };
 
   const getPetStatus = (pet) => {
-    if (!hasWallet) return { status: "no-wallet", message: "Connect wallet" };
+    if (!isConnected) return { status: "no-wallet", message: "Connect wallet" };
     if (!pet.tokenId) return { status: "not-minted", message: "Not minted" };
     if (
       userListings.some(
@@ -380,7 +459,7 @@ const Marketplace = () => {
           <h1 className="text-4xl font-bold text-white mb-4">Marketplace</h1>
           <p className="text-gray-300 text-lg max-w-2xl mx-auto">
             Buy, sell, and trade amazing pets with players worldwide.{" "}
-            {!hasWallet && "Connect your wallet to start trading!"}
+            {!isConnected && "Connect your wallet to start trading!"}
           </p>
         </div>
 
@@ -421,7 +500,7 @@ const Marketplace = () => {
         </div>
 
         {/* Wallet Connection Banner */}
-        {!hasWallet && (
+        {!isConnected && (
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 mb-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -437,7 +516,7 @@ const Marketplace = () => {
                 </div>
               </div>
               <Button
-                onClick={connectWallet}
+                onClick={handleConnectWallet}
                 variant="white"
                 className="flex items-center space-x-2"
               >
@@ -528,9 +607,9 @@ const Marketplace = () => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Tiers</option>
-                  {Object.entries(TIERS).map(([key, tier]) => (
-                    <option key={key} value={key}>
-                      {tier.emoji} {tier.name}
+                  {Object.values(PET_RARITIES).map((tier) => (
+                    <option key={tier} value={tier}>
+                      {formatTier(tier).emoji} {tier}
                     </option>
                   ))}
                 </select>
@@ -549,11 +628,11 @@ const Marketplace = () => {
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Types</option>
-                  {Object.entries(TYPES).map(([key, type]) => (
-                    <option key={key} value={key}>
-                      {type.emoji} {type.name}
-                    </option>
-                  ))}
+                  <option value="FIRE">🔥 Fire</option>
+                  <option value="WATER">💧 Water</option>
+                  <option value="EARTH">🌿 Earth</option>
+                  <option value="AIR">💨 Air</option>
+                  <option value="ELECTRIC">⚡ Electric</option>
                 </select>
               </div>
 
@@ -660,8 +739,8 @@ const Marketplace = () => {
                         ? "Try adjusting your filters or search terms"
                         : "No pets are currently listed for sale"}
                     </p>
-                    {!hasWallet && (
-                      <Button onClick={connectWallet} variant="primary">
+                    {!isConnected && (
+                      <Button onClick={handleConnectWallet} variant="primary">
                         <Wallet className="w-4 h-4 mr-2" />
                         Connect Wallet to Sell Pets
                       </Button>
@@ -674,7 +753,7 @@ const Marketplace = () => {
                         key={listing.id}
                         listing={listing}
                         onPurchaseSuccess={loadMarketplaceData}
-                        canPurchase={hasWallet}
+                        canPurchase={isConnected}
                       />
                     ))}
                   </div>
@@ -689,8 +768,12 @@ const Marketplace = () => {
                   <h2 className="text-2xl font-bold text-white">
                     My Pets ({pets.length})
                   </h2>
-                  {!hasWallet && (
-                    <Button onClick={connectWallet} variant="primary" size="sm">
+                  {!isConnected && (
+                    <Button
+                      onClick={handleConnectWallet}
+                      variant="primary"
+                      size="sm"
+                    >
                       <Wallet className="w-4 h-4 mr-2" />
                       Connect Wallet to Sell
                     </Button>
@@ -726,11 +809,21 @@ const Marketplace = () => {
                           <div className="flex items-center space-x-3 mb-3">
                             <div
                               className={`w-12 h-12 rounded-lg ${
-                                TIERS[pet.tier]?.bgColor || "bg-gray-600"
+                                formatTier(pet.tier).bgColor
                               } flex items-center justify-center`}
                             >
                               <span className="text-lg">
-                                {TYPES[pet.type]?.emoji || "🐾"}
+                                {pet.type === "FIRE"
+                                  ? "🔥"
+                                  : pet.type === "WATER"
+                                  ? "💧"
+                                  : pet.type === "EARTH"
+                                  ? "🌿"
+                                  : pet.type === "AIR"
+                                  ? "💨"
+                                  : pet.type === "ELECTRIC"
+                                  ? "⚡"
+                                  : "🐾"}
                               </span>
                             </div>
                             <div className="flex-1">
@@ -795,15 +888,19 @@ const Marketplace = () => {
                   <h2 className="text-2xl font-bold text-white">
                     My Listings ({userListings.length})
                   </h2>
-                  {!hasWallet && (
-                    <Button onClick={connectWallet} variant="primary" size="sm">
+                  {!isConnected && (
+                    <Button
+                      onClick={handleConnectWallet}
+                      variant="primary"
+                      size="sm"
+                    >
                       <Wallet className="w-4 h-4 mr-2" />
                       Connect Wallet
                     </Button>
                   )}
                 </div>
 
-                {!hasWallet ? (
+                {!isConnected ? (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">🔗</div>
                     <h3 className="text-xl font-bold text-white mb-2">
@@ -812,7 +909,7 @@ const Marketplace = () => {
                     <p className="text-gray-400 mb-6">
                       Connect your wallet to view and manage your listings
                     </p>
-                    <Button onClick={connectWallet} variant="primary">
+                    <Button onClick={handleConnectWallet} variant="primary">
                       <Wallet className="w-4 h-4 mr-2" />
                       Connect Wallet
                     </Button>
@@ -861,7 +958,6 @@ const Marketplace = () => {
         pet={selectedPet}
         onListSuccess={() => {
           loadMarketplaceData();
-          loadGameData();
         }}
       />
     </div>

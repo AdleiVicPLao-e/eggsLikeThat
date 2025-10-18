@@ -1,85 +1,89 @@
 import React, { useState, useEffect } from "react";
 import { useUser } from "../context/UserContext";
 import { useGame } from "../context/GameContext";
-import { useGameAPI } from "../hooks/useGameAPI";
-import { useBlockchain } from "../hooks/useBlockchain";
+import { useWallet } from "../hooks/useWallet";
 import PetCard from "../components/Pets/PetCard";
 import HatchAnimation from "../components/Game/HatchAnimation";
 import { Coins, Zap, Gift, Sparkles, ShoppingCart, Wallet } from "lucide-react";
-import { rng, previewHatch } from "../utils/rollSystem";
-import { formatCurrency, formatTier, formatType } from "../utils/rarity";
-import { TIERS, TYPES, GAME_CONFIG } from "../utils/constants";
+import {
+  EGG_TYPES,
+  PET_RARITIES,
+  CURRENCIES,
+  GAME_CONFIG,
+} from "../utils/constants";
 
 const Hatchery = () => {
-  const { user, isAuthenticated, hasWallet, connectWallet } = useUser();
-  const { pets, eggs, coins, addPet, addEgg, updateCoins, updateFreeRolls } =
+  const { user, isAuthenticated, updateProfile } = useUser();
+  const { pets, eggs, addPet, addEgg, updateCoins, updateFreeRolls, gameAPI } =
     useGame();
-  const {
-    hatchEgg: apiHatchEgg,
-    purchaseEgg: apiPurchaseEgg,
-    getFreeEgg: apiGetFreeEgg,
-  } = useGameAPI();
-  const {
-    purchaseEgg: blockchainPurchaseEgg,
-    hatchEgg: blockchainHatchEgg,
-    transactionLoading,
-  } = useBlockchain();
+  const { account, isConnected, connect, registerWithWallet, loginWithWallet } =
+    useWallet();
 
   const [newlyHatchedPet, setNewlyHatchedPet] = useState(null);
   const [showHatchAnimation, setShowHatchAnimation] = useState(false);
-  const [selectedEggType, setSelectedEggType] = useState("BASIC");
+  const [selectedEggType, setSelectedEggType] = useState(EGG_TYPES.BASIC);
   const [eggPreview, setEggPreview] = useState(null);
   const [useBlockchainHatch, setUseBlockchainHatch] = useState(false);
   const [isHatching, setIsHatching] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
-  // Generate egg preview when egg type changes
+  // Load egg preview from API when egg type changes
   useEffect(() => {
-    generateEggPreview();
+    loadEggPreview();
   }, [selectedEggType]);
 
-  // Generate egg preview
-  const generateEggPreview = () => {
-    const preview = previewHatch(selectedEggType);
-    setEggPreview(preview);
+  const loadEggPreview = async () => {
+    try {
+      // This would call your API to get egg preview data
+      // For now, we'll set a placeholder
+      setEggPreview([
+        { tier: PET_RARITIES.COMMON, type: "dragon", probability: "40%" },
+        { tier: PET_RARITIES.UNCOMMON, type: "phoenix", probability: "25%" },
+        { tier: PET_RARITIES.RARE, type: "unicorn", probability: "15%" },
+        { tier: PET_RARITIES.EPIC, type: "griffin", probability: "10%" },
+        { tier: PET_RARITIES.LEGENDARY, type: "dragon", probability: "7%" },
+        { tier: PET_RARITIES.MYTHIC, type: "phoenix", probability: "3%" },
+      ]);
+    } catch (error) {
+      console.error("Failed to load egg preview:", error);
+    }
   };
 
-  // Purchase egg with coins or blockchain
-  const purchaseEgg = async (eggType, currency = "coins") => {
+  // Handle wallet connection
+  const handleConnectWallet = async () => {
+    const result = await connect();
+    if (result.success) {
+      // Try to login with wallet first, if not registered, prompt for registration
+      const loginResult = await loginWithWallet();
+      if (!loginResult.success) {
+        // If login fails, try registration with minimal data
+        await registerWithWallet({ username: `user_${account.slice(2, 8)}` });
+      }
+    }
+  };
+
+  // Purchase egg with coins
+  const purchaseEgg = async (eggType) => {
     if (!isAuthenticated) return;
 
+    setIsPurchasing(true);
     try {
-      if (currency === "coins") {
-        // Purchase with in-game coins (backend)
-        const result = await apiPurchaseEgg({ eggType, currency });
-        if (result.success) {
-          addEgg(result.data.egg);
-          updateCoins(-result.data.egg.purchasePrice);
-          alert(`Purchased ${eggType} egg successfully!`);
-        }
+      const result = await gameAPI.purchaseEgg({
+        eggType,
+        currency: CURRENCIES.COINS,
+      });
+      if (result.success) {
+        addEgg(result.data.egg);
+        updateCoins(-result.data.egg.purchasePrice);
+        alert(`Purchased ${eggType} egg successfully!`);
       } else {
-        // Purchase with crypto (blockchain)
-        if (!hasWallet) {
-          const connectResult = await connectWallet();
-          if (!connectResult.success) {
-            alert("Please connect your wallet to purchase with cryptocurrency");
-            return;
-          }
-        }
-
-        const result = await blockchainPurchaseEgg(
-          getEggTypeId(eggType),
-          1 // amount
-        );
-
-        if (result.success) {
-          alert(
-            "Egg purchased on blockchain! It will appear in your inventory shortly."
-          );
-        }
+        alert(result.error || "Purchase failed");
       }
     } catch (error) {
       console.error("Failed to purchase egg:", error);
       alert(`Purchase failed: ${error.message}`);
+    } finally {
+      setIsPurchasing(false);
     }
   };
 
@@ -88,11 +92,13 @@ const Hatchery = () => {
     if (!isAuthenticated) return;
 
     try {
-      const result = await apiGetFreeEgg();
+      const result = await gameAPI.getFreeEgg();
       if (result.success) {
         addEgg(result.data.egg);
         updateFreeRolls(-1);
         alert("Free egg claimed successfully!");
+      } else {
+        alert(result.error || "Failed to claim free egg");
       }
     } catch (error) {
       console.error("Failed to claim free egg:", error);
@@ -100,17 +106,17 @@ const Hatchery = () => {
     }
   };
 
-  // Hatch egg (backend or blockchain)
-  const hatchEgg = async (eggId = null, useBlockchain = false) => {
+  // Hatch egg
+  const hatchEgg = async (eggId = null) => {
     if (!isAuthenticated) return;
 
     setIsHatching(true);
 
     // Check if using free roll or has enough coins
     const canUseFreeRoll = user.freeRolls > 0;
-    const hatchCost = GAME_CONFIG.HATCH_COST;
+    const hatchCost = GAME_CONFIG?.HATCH_COST || 50;
 
-    if (!canUseFreeRoll && coins < hatchCost) {
+    if (!canUseFreeRoll && user.coins < hatchCost) {
       alert(`Not enough coins! Hatching costs ${hatchCost} coins.`);
       setIsHatching(false);
       return;
@@ -119,36 +125,15 @@ const Hatchery = () => {
     setShowHatchAnimation(true);
 
     try {
-      let result;
+      const result = await gameAPI.hatchEgg({
+        eggId,
+        useFreeRoll: canUseFreeRoll,
+        eggType: selectedEggType,
+      });
 
-      if (useBlockchain) {
-        if (!hasWallet) {
-          const connectResult = await connectWallet();
-          if (!connectResult.success) {
-            alert("Please connect your wallet to hatch on blockchain");
-            setShowHatchAnimation(false);
-            setIsHatching(false);
-            return;
-          }
-        }
-
-        // Hatch on blockchain
-        result = await blockchainHatchEgg(getEggTypeId(selectedEggType));
-      } else {
-        // Hatch via backend API
-        result = await apiHatchEgg({
-          eggId,
-          useFreeRoll: canUseFreeRoll,
-          eggType: selectedEggType,
-        });
-      }
-
-      if (result.success) {
-        // Update local state
-        if (result.data.pet) {
-          addPet(result.data.pet);
-          setNewlyHatchedPet(result.data.pet);
-        }
+      if (result.success && result.data.pet) {
+        addPet(result.data.pet);
+        setNewlyHatchedPet(result.data.pet);
 
         if (!canUseFreeRoll) {
           updateCoins(-hatchCost);
@@ -161,6 +146,8 @@ const Hatchery = () => {
           setShowHatchAnimation(false);
           setIsHatching(false);
         }, 3000);
+      } else {
+        throw new Error(result.error || "Hatching failed");
       }
     } catch (error) {
       console.error("Hatching failed:", error);
@@ -172,24 +159,98 @@ const Hatchery = () => {
 
   // Quick hatch (no specific egg)
   const quickHatch = () => {
-    hatchEgg(null, useBlockchainHatch);
-  };
-
-  // Helper function to get egg type ID
-  const getEggTypeId = (eggType) => {
-    const eggTypes = { BASIC: 0, PREMIUM: 1, COSMETIC: 2, MYSTERY: 3 };
-    return eggTypes[eggType] || 0;
+    hatchEgg(null);
   };
 
   // Get egg cost
-  const getEggCost = (eggType, currency = "coins") => {
+  const getEggCost = (eggType) => {
     const costs = {
-      BASIC: { coins: 100, ETH: 0.001 },
-      PREMIUM: { coins: 250, ETH: 0.005 },
-      COSMETIC: { coins: 150, ETH: 0.003 },
-      MYSTERY: { coins: 200, ETH: 0.004 },
+      [EGG_TYPES.BASIC]: 100,
+      [EGG_TYPES.PREMIUM]: 250,
+      [EGG_TYPES.COSMETIC]: 150,
+      [EGG_TYPES.MYSTERY]: 200,
     };
-    return costs[eggType]?.[currency] || costs.BASIC.coins;
+    return costs[eggType] || costs[EGG_TYPES.BASIC];
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount, currency = CURRENCIES.COINS) => {
+    if (currency === CURRENCIES.ETH) {
+      return `${amount} ETH`;
+    }
+    return amount.toLocaleString();
+  };
+
+  // Format tier for display
+  const formatTier = (tier) => {
+    const tierStyles = {
+      [PET_RARITIES.COMMON]: {
+        emoji: "⚪",
+        bgColor: "bg-gray-500",
+        textColor: "text-gray-300",
+      },
+      [PET_RARITIES.UNCOMMON]: {
+        emoji: "🟢",
+        bgColor: "bg-green-500",
+        textColor: "text-green-300",
+      },
+      [PET_RARITIES.RARE]: {
+        emoji: "🔵",
+        bgColor: "bg-blue-500",
+        textColor: "text-blue-300",
+      },
+      [PET_RARITIES.EPIC]: {
+        emoji: "🟣",
+        bgColor: "bg-purple-500",
+        textColor: "text-purple-300",
+      },
+      [PET_RARITIES.LEGENDARY]: {
+        emoji: "🟡",
+        bgColor: "bg-yellow-500",
+        textColor: "text-yellow-300",
+      },
+      [PET_RARITIES.MYTHIC]: {
+        emoji: "🔴",
+        bgColor: "bg-red-500",
+        textColor: "text-red-300",
+      },
+      [PET_RARITIES.CELESTIAL]: {
+        emoji: "⚡",
+        bgColor: "bg-indigo-500",
+        textColor: "text-indigo-300",
+      },
+      [PET_RARITIES.EXOTIC]: {
+        emoji: "🌈",
+        bgColor: "bg-pink-500",
+        textColor: "text-pink-300",
+      },
+      [PET_RARITIES.ULTIMATE]: {
+        emoji: "👑",
+        bgColor: "bg-orange-500",
+        textColor: "text-orange-300",
+      },
+      [PET_RARITIES.GODLY]: {
+        emoji: "✨",
+        bgColor: "bg-cyan-500",
+        textColor: "text-cyan-300",
+      },
+    };
+    return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
+  };
+
+  // Format type for display
+  const formatType = (type) => {
+    const typeNames = {
+      dragon: "Dragon",
+      phoenix: "Phoenix",
+      unicorn: "Unicorn",
+      griffin: "Griffin",
+      wolf: "Wolf",
+      cat: "Cat",
+      dog: "Dog",
+      bird: "Bird",
+    };
+    return { name: typeNames[type] || type };
   };
 
   if (!isAuthenticated) {
@@ -215,6 +276,13 @@ const Hatchery = () => {
     );
   }
 
+  const eggTypes = [
+    EGG_TYPES.BASIC,
+    EGG_TYPES.PREMIUM,
+    EGG_TYPES.COSMETIC,
+    "MYSTERY",
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
       <div className="container mx-auto px-4 py-8">
@@ -223,7 +291,7 @@ const Hatchery = () => {
           <h1 className="text-4xl font-bold text-white mb-4">Hatchery</h1>
           <p className="text-gray-300 text-lg max-w-2xl mx-auto">
             Discover amazing pets by hatching eggs.{" "}
-            {!hasWallet && "Connect your wallet for blockchain features!"}
+            {!isConnected && "Connect your wallet for blockchain features!"}
           </p>
         </div>
 
@@ -237,7 +305,7 @@ const Hatchery = () => {
               </h3>
 
               <div className="space-y-3">
-                {["BASIC", "PREMIUM", "COSMETIC", "MYSTERY"].map((eggType) => (
+                {eggTypes.map((eggType) => (
                   <button
                     key={eggType}
                     onClick={() => setSelectedEggType(eggType)}
@@ -252,11 +320,11 @@ const Hatchery = () => {
                         <h4 className="font-bold text-white">{eggType} Egg</h4>
                         <p className="text-gray-400 text-sm">
                           Chance for{" "}
-                          {eggType === "PREMIUM"
+                          {eggType === EGG_TYPES.PREMIUM
                             ? "Uncommon+"
                             : eggType === "MYSTERY"
                             ? "Rare+"
-                            : eggType === "COSMETIC"
+                            : eggType === EGG_TYPES.COSMETIC
                             ? "Special Skins"
                             : "Common+"}{" "}
                           pets
@@ -264,16 +332,8 @@ const Hatchery = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-yellow-400 font-bold">
-                          {formatCurrency(
-                            getEggCost(eggType, "coins"),
-                            "coins"
-                          )}
+                          {formatCurrency(getEggCost(eggType))}
                         </div>
-                        {hasWallet && (
-                          <div className="text-blue-400 text-sm">
-                            {formatCurrency(getEggCost(eggType, "ETH"), "ETH")}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </button>
@@ -283,29 +343,30 @@ const Hatchery = () => {
               {/* Purchase Options */}
               <div className="mt-6 space-y-3">
                 <button
-                  onClick={() => purchaseEgg(selectedEggType, "coins")}
-                  disabled={coins < getEggCost(selectedEggType, "coins")}
+                  onClick={() => purchaseEgg(selectedEggType)}
+                  disabled={
+                    isPurchasing || user.coins < getEggCost(selectedEggType)
+                  }
                   className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
                 >
                   <ShoppingCart className="w-5 h-5 mr-2" />
-                  Buy with Coins
+                  {isPurchasing ? "Purchasing..." : "Buy with Coins"}
                 </button>
 
-                {hasWallet ? (
-                  <button
-                    onClick={() => purchaseEgg(selectedEggType, "ETH")}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
-                  >
-                    <Zap className="w-5 h-5 mr-2" />
-                    Buy with Crypto
-                  </button>
+                {isConnected ? (
+                  <div className="p-3 bg-green-500 bg-opacity-20 rounded-lg border border-green-500 text-center">
+                    <div className="text-green-400 text-sm font-medium flex items-center justify-center">
+                      <Wallet className="w-4 h-4 mr-2" />
+                      Wallet Connected
+                    </div>
+                  </div>
                 ) : (
                   <button
-                    onClick={connectWallet}
-                    className="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
+                    onClick={handleConnectWallet}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
                   >
                     <Wallet className="w-5 h-5 mr-2" />
-                    Connect Wallet to Buy with Crypto
+                    Connect Wallet
                   </button>
                 )}
 
@@ -343,7 +404,7 @@ const Hatchery = () => {
                         </div>
                         <div>
                           <div className="text-white font-medium">
-                            {formatTier(pet.tier).name}
+                            {pet.tier}
                           </div>
                           <div className="text-gray-400 text-sm">
                             {formatType(pet.type).name}
@@ -390,13 +451,12 @@ const Hatchery = () => {
                         onClick={quickHatch}
                         disabled={
                           isHatching ||
-                          transactionLoading ||
                           (user.freeRolls === 0 &&
-                            coins < GAME_CONFIG.HATCH_COST)
+                            user.coins < (GAME_CONFIG?.HATCH_COST || 50))
                         }
                         className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
                       >
-                        {isHatching || transactionLoading ? (
+                        {isHatching ? (
                           <span className="flex items-center justify-center">
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                             Hatching...
@@ -404,11 +464,11 @@ const Hatchery = () => {
                         ) : user.freeRolls > 0 ? (
                           `Hatch with Free Roll (${user.freeRolls} left)`
                         ) : (
-                          `Hatch Egg (${GAME_CONFIG.HATCH_COST} Coins)`
+                          `Hatch Egg (${GAME_CONFIG?.HATCH_COST || 50} Coins)`
                         )}
                       </button>
 
-                      {hasWallet && (
+                      {isConnected && (
                         <div className="flex items-center justify-center space-x-2 p-3 bg-gray-700 rounded-lg">
                           <input
                             type="checkbox"
@@ -464,7 +524,7 @@ const Hatchery = () => {
                     <span className="font-bold">Coins</span>
                   </div>
                   <div className="text-2xl font-bold text-white">
-                    {formatCurrency(coins, "coins")}
+                    {formatCurrency(user.coins || 0)}
                   </div>
                 </div>
                 <div className="bg-gray-700 rounded-lg p-4">
@@ -489,27 +549,6 @@ const Hatchery = () => {
                   <div className="text-gray-400">Total Eggs</div>
                 </div>
               </div>
-
-              {/* Wallet Status */}
-              {hasWallet ? (
-                <div className="mt-4 p-3 bg-green-500 bg-opacity-20 rounded-lg border border-green-500">
-                  <div className="text-green-400 text-sm font-medium flex items-center">
-                    <Wallet className="w-4 h-4 mr-2" />
-                    Wallet Connected
-                  </div>
-                  <div className="text-gray-300 text-xs mt-1">
-                    Ready for blockchain transactions
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={connectWallet}
-                  className="w-full mt-4 p-3 bg-blue-500 bg-opacity-20 rounded-lg border border-blue-500 text-blue-400 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center"
-                >
-                  <Wallet className="w-4 h-4 mr-2" />
-                  Connect Wallet
-                </button>
-              )}
             </div>
 
             {/* Egg Inventory */}
@@ -542,7 +581,7 @@ const Hatchery = () => {
                         </div>
                         <div>
                           <div className="text-white font-medium">
-                            {egg.eggType || "BASIC"} Egg
+                            {egg.eggType || EGG_TYPES.BASIC} Egg
                           </div>
                           <div className="text-gray-400 text-sm capitalize">
                             {egg.rarity?.toLowerCase() || "common"} •{" "}
@@ -552,7 +591,7 @@ const Hatchery = () => {
                       </div>
                       {!egg.isHatched && (
                         <button
-                          onClick={() => hatchEgg(egg.id, useBlockchainHatch)}
+                          onClick={() => hatchEgg(egg.id)}
                           disabled={isHatching}
                           className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded text-white text-sm transition-colors"
                         >
@@ -586,7 +625,7 @@ const Hatchery = () => {
                 <div className="space-y-3">
                   {/* Tier Summary */}
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    {Object.entries(TIERS).map(([tier, data]) => {
+                    {Object.values(PET_RARITIES).map((tier) => {
                       const count = pets.filter(
                         (pet) => pet.tier === tier
                       ).length;
@@ -598,9 +637,11 @@ const Hatchery = () => {
                           className="flex items-center justify-between p-2 bg-gray-700 rounded"
                         >
                           <span
-                            className={`${data.textColor} font-medium flex items-center space-x-1`}
+                            className={`${
+                              formatTier(tier).textColor
+                            } font-medium flex items-center space-x-1`}
                           >
-                            <span>{data.emoji}</span>
+                            <span>{formatTier(tier).emoji}</span>
                             <span>{tier}</span>
                           </span>
                           <span className="text-white font-bold">{count}</span>

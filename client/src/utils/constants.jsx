@@ -1,4 +1,4 @@
-// client/src/utils/constants.js
+// client/src/utils/constants.jsx
 export const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:3001/api";
 
@@ -7,7 +7,6 @@ export const EGG_TYPES = {
   BASIC: "basic",
   COSMETIC: "cosmetic",
   ATTRIBUTE: "attribute",
-  PREMIUM: "premium",
 };
 
 export const PET_RARITIES = {

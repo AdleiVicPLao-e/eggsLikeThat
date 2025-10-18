@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from "react";
-
 const HatchAnimation = ({ isHatching, onComplete, duration = 2000 }) => {
   const [stage, setStage] = useState("idle"); // idle, cracking, hatching, complete
 

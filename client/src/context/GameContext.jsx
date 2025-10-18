@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { useGameAPI } from "../hooks/useGameAPI.jsx";
-import { useBlockchain } from "../hooks/useBlockchain.jsx";
 import { useUser } from "./UserContext.jsx";
 
 const GameContext = createContext();
@@ -14,7 +13,7 @@ export const useGame = () => {
 };
 
 export const GameProvider = ({ children }) => {
-  const { user, updateUser } = useUser();
+  const { user, updateProfile } = useUser();
 
   // Local state
   const [pets, setPets] = useState([]);
@@ -24,44 +23,25 @@ export const GameProvider = ({ children }) => {
   const [lastSync, setLastSync] = useState(null);
   const [battleTeam, setBattleTeam] = useState([]);
 
-  // Define syncBlockchainData first so we can inject it into useBlockchain
-  const syncBlockchainData = useCallback(async () => {
-    if (!user?.walletAddress) return;
-    try {
-      const blockchainPets = await blockchain.getOwnedPets(user.walletAddress);
-      if (blockchainPets.success) {
-        console.log("Synced blockchain pets:", blockchainPets.pets);
-      }
-      setLastSync(new Date().toISOString());
-    } catch (error) {
-      console.error("Error syncing blockchain data:", error);
-    }
-  }, [user?.walletAddress]);
-
-  // Initialize blockchain hook AFTER defining syncBlockchainData
-  const blockchain = useBlockchain({
-    syncBlockchainData,
-    updateUser,
+  // Initialize game API with state update callbacks
+  const gameAPI = useGameAPI({
+    updateUser: updateProfile,
+    updatePets: setPets,
+    updateEggs: setEggs,
+    updateInventory: setInventory,
+    onError: (error) => console.error("Game API Error:", error)
   });
 
-  const { getOwnedPets } = blockchain;
-
-  // Attach API handlers
-  const { getUserPets, getUserEggs, hatchEgg, feedPet, claimDailyReward } =
-    useGameAPI({
-      updateUser,
-      updatePets: setPets,
-      updateEggs: setEggs,
-      updateInventory: setInventory,
-    });
-
-  React.useEffect(() => {
+  // Load game data when user changes
+  useEffect(() => {
     if (user?.id) {
       loadGameData();
     } else {
+      // Clear game data when user logs out
       setPets([]);
       setEggs([]);
       setInventory([]);
+      setBattleTeam([]);
     }
   }, [user?.id]);
 
@@ -70,12 +50,20 @@ export const GameProvider = ({ children }) => {
 
     setIsLoading(true);
     try {
+      // Load pets and eggs in parallel
       const [petsData, eggsData] = await Promise.all([
-        getUserPets(),
-        getUserEggs(),
+        gameAPI.getUserPets(),
+        gameAPI.getUserEggs()
       ]);
-      if (petsData?.data?.pets) setPets(petsData.data.pets);
-      if (eggsData?.data?.eggs) setEggs(eggsData.data.eggs);
+
+      // Update state with API responses
+      if (petsData?.success && petsData.data?.pets) {
+        setPets(petsData.data.pets);
+      }
+      if (eggsData?.success && eggsData.data?.eggs) {
+        setEggs(eggsData.data.eggs);
+      }
+      
       setLastSync(new Date().toISOString());
     } catch (error) {
       console.error("Error loading game data:", error);
@@ -83,6 +71,19 @@ export const GameProvider = ({ children }) => {
       setIsLoading(false);
     }
   };
+
+  // Sync function for blockchain data (if needed)
+  const syncBlockchainData = useCallback(async () => {
+    if (!user?.walletAddress) return;
+    try {
+      // This would be your blockchain integration
+      // const blockchainPets = await blockchain.getOwnedPets(user.walletAddress);
+      console.log("Syncing blockchain data for:", user.walletAddress);
+      setLastSync(new Date().toISOString());
+    } catch (error) {
+      console.error("Error syncing blockchain data:", error);
+    }
+  }, [user?.walletAddress]);
 
   // ---------------------------
   // 🐾 Pet Management
@@ -155,15 +156,15 @@ export const GameProvider = ({ children }) => {
   );
 
   // ---------------------------
-  // 💰 User Progression
+  // 💰 User Progression (Local state updates)
   // ---------------------------
   const updateCoins = useCallback(
     (amount) => {
       if (!user) return;
       const newCoins = Math.max(0, (user.coins || 0) + amount);
-      updateUser({ coins: newCoins });
+      updateProfile({ coins: newCoins });
     },
-    [user, updateUser]
+    [user, updateProfile]
   );
 
   const updateExperience = useCallback(
@@ -171,12 +172,12 @@ export const GameProvider = ({ children }) => {
       if (!user) return;
 
       const newExperience = (user.experience || 0) + amount;
-      updateUser({ experience: newExperience });
+      updateProfile({ experience: newExperience });
 
       const expNeeded = Math.pow(user.level || 1, 2) * 100;
       if (newExperience >= expNeeded) {
         const newLevel = (user.level || 1) + 1;
-        updateUser({
+        updateProfile({
           level: newLevel,
           experience: newExperience - expNeeded,
         });
@@ -185,16 +186,16 @@ export const GameProvider = ({ children }) => {
 
       return { leveledUp: false };
     },
-    [user, updateUser]
+    [user, updateProfile]
   );
 
   const updateFreeRolls = useCallback(
     (amount) => {
       if (!user) return;
       const newFreeRolls = Math.max(0, (user.freeRolls || 0) + amount);
-      updateUser({ freeRolls: newFreeRolls });
+      updateProfile({ freeRolls: newFreeRolls });
     },
-    [user, updateUser]
+    [user, updateProfile]
   );
 
   // ---------------------------
@@ -216,9 +217,52 @@ export const GameProvider = ({ children }) => {
   const clearBattleTeam = useCallback(() => setBattleTeam([]), []);
 
   // ---------------------------
+  // 🎮 Game Actions (Using API)
+  // ---------------------------
+  const handleHatchEgg = useCallback(async (eggId) => {
+    try {
+      const result = await gameAPI.hatchEgg(eggId);
+      if (result.success) {
+        return result;
+      }
+      throw new Error(result.error || "Hatching failed");
+    } catch (error) {
+      console.error("Error hatching egg:", error);
+      throw error;
+    }
+  }, [gameAPI]);
+
+  const handleFeedPet = useCallback(async (petId, foodItem) => {
+    // This would be implemented based on your API
+    try {
+      // Example implementation
+      console.log("Feeding pet:", petId, foodItem);
+      // const result = await gameAPI.feedPet(petId, foodItem);
+      // return result;
+    } catch (error) {
+      console.error("Error feeding pet:", error);
+      throw error;
+    }
+  }, []);
+
+  const handleClaimDailyReward = useCallback(async () => {
+    try {
+      const result = await gameAPI.claimDailyReward();
+      if (result.success) {
+        return result;
+      }
+      throw new Error(result.error || "Claiming daily reward failed");
+    } catch (error) {
+      console.error("Error claiming daily reward:", error);
+      throw error;
+    }
+  }, [gameAPI]);
+
+  // ---------------------------
   // 💾 Context Value
   // ---------------------------
   const value = {
+    // State
     pets,
     eggs,
     inventory,
@@ -226,31 +270,62 @@ export const GameProvider = ({ children }) => {
     isLoading,
     lastSync,
 
-    // Actions
+    // Pet Management
     addPet,
     updatePet,
     removePet,
     getPet,
     getPetsByTier,
     getPetsByType,
+
+    // Egg Management
     addEgg,
     updateEgg,
     removeEgg,
     getEgg,
+
+    // User Progression
     updateCoins,
     updateExperience,
     updateFreeRolls,
+
+    // Battle Team
     addToBattleTeam,
     removeFromBattleTeam,
     clearBattleTeam,
+
+    // Game Actions
     loadGameData,
     syncBlockchainData,
-    hatchEgg,
-    feedPet,
-    claimDailyReward,
+    hatchEgg: handleHatchEgg,
+    feedPet: handleFeedPet,
+    claimDailyReward: handleClaimDailyReward,
 
+    // API Methods (exposed for direct use if needed)
+    gameAPI: {
+      // Pets
+      getUserPets: gameAPI.getUserPets,
+      upgradePet: gameAPI.upgradePet,
+      trainPet: gameAPI.trainPet,
+      fusePets: gameAPI.fusePets,
+      
+      // Eggs
+      getUserEggs: gameAPI.getUserEggs,
+      purchaseEgg: gameAPI.purchaseEgg,
+      getFreeEgg: gameAPI.getFreeEgg,
+      
+      // Game
+      startBattle: gameAPI.startBattle,
+      completeQuest: gameAPI.completeQuest,
+      
+      // Trading
+      listPet: gameAPI.listPet,
+      purchasePet: gameAPI.purchasePet,
+    },
+
+    // User context (for convenience)
     user,
-    updateUser,
+    updateUser: updateProfile,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

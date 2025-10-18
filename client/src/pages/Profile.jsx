@@ -1,63 +1,30 @@
 import React from "react";
 import { useUser } from "../context/UserContext";
 import { useGame } from "../context/GameContext";
-import { useBlockchain } from "../hooks/useBlockchain";
 import {
   User,
   Coins,
   Award,
-  Clock,
   Sparkles,
   Trophy,
-  Zap,
   Users,
   Mail,
   Shield,
   GamepadIcon,
 } from "lucide-react";
 import PetCard from "../components/Pets/PetCard";
-import {
-  formatCurrency,
-  formatNumber,
-  formatTier,
-  formatType,
-} from "../utils/rarity";
-import { TIERS } from "../utils/constants";
+import { PET_RARITIES } from "../utils/constants";
 
 const Profile = () => {
-  const { user, isAuthenticated, hasWallet, connectWallet } = useUser();
+  const { user, isAuthenticated } = useUser();
   const { pets, eggs, battleTeam, lastSync } = useGame();
-  const { getBalance, getTokenBalance } = useBlockchain();
 
-  const [walletBalance, setWalletBalance] = React.useState("0");
-  const [tokenBalance, setTokenBalance] = React.useState("0");
   const [profileStats, setProfileStats] = React.useState({});
-
-  // Load blockchain data when user is connected
-  React.useEffect(() => {
-    if (user?.walletAddress && hasWallet) {
-      loadBlockchainData();
-    }
-  }, [user?.walletAddress, hasWallet]);
 
   // Calculate profile stats
   React.useEffect(() => {
     calculateStats();
   }, [pets, eggs]);
-
-  const loadBlockchainData = async () => {
-    try {
-      const [balanceResult, tokenResult] = await Promise.all([
-        getBalance(user.walletAddress),
-        getTokenBalance(),
-      ]);
-
-      if (balanceResult.success) setWalletBalance(balanceResult.balance);
-      if (tokenResult.success) setTokenBalance(tokenResult.balance);
-    } catch (error) {
-      console.error("Error loading blockchain data:", error);
-    }
-  };
 
   const calculateStats = () => {
     if (!pets.length) return;
@@ -82,7 +49,6 @@ const Profile = () => {
           pet.stats.defense +
           pet.stats.speed +
           pet.stats.health) *
-        (TIERS[pet.tier]?.statMultiplier || 1) *
         (1 + (pet.level - 1) * 0.1);
       totalPower += power;
 
@@ -91,8 +57,8 @@ const Profile = () => {
       }
 
       // Find rarest pet
-      const currentRarity = TIERS[pet.tier]?.id || 0;
-      const rarestRarity = TIERS[rarestPet.tier]?.id || 0;
+      const currentRarity = getTierId(pet.tier);
+      const rarestRarity = getTierId(rarestPet.tier);
       if (currentRarity > rarestRarity) {
         rarestPet = pet;
       }
@@ -116,6 +82,225 @@ const Profile = () => {
       hatchedEggs: eggs.filter((egg) => egg.isHatched).length,
       unhatchedEggs: eggs.filter((egg) => !egg.isHatched).length,
     });
+  };
+
+  // Format currency for display
+  const formatCurrency = (amount, currency = "coins") => {
+    if (currency === "ETH" || currency === "MATIC") {
+      return `${parseFloat(amount).toFixed(4)} ${currency}`;
+    }
+    return amount.toLocaleString();
+  };
+
+  // Format number for display
+  const formatNumber = (num) => {
+    return num.toLocaleString();
+  };
+
+  // Format tier for display
+  const formatTier = (tier) => {
+    const tierStyles = {
+      [PET_RARITIES.COMMON]: {
+        emoji: "⚪",
+        bgColor: "bg-gray-500",
+        textColor: "text-gray-300",
+        name: "Common",
+      },
+      [PET_RARITIES.UNCOMMON]: {
+        emoji: "🟢",
+        bgColor: "bg-green-500",
+        textColor: "text-green-300",
+        name: "Uncommon",
+      },
+      [PET_RARITIES.RARE]: {
+        emoji: "🔵",
+        bgColor: "bg-blue-500",
+        textColor: "text-blue-300",
+        name: "Rare",
+      },
+      [PET_RARITIES.EPIC]: {
+        emoji: "🟣",
+        bgColor: "bg-purple-500",
+        textColor: "text-purple-300",
+        name: "Epic",
+      },
+      [PET_RARITIES.LEGENDARY]: {
+        emoji: "🟡",
+        bgColor: "bg-yellow-500",
+        textColor: "text-yellow-300",
+        name: "Legendary",
+      },
+      [PET_RARITIES.MYTHIC]: {
+        emoji: "🔴",
+        bgColor: "bg-red-500",
+        textColor: "text-red-300",
+        name: "Mythic",
+      },
+      [PET_RARITIES.CELESTIAL]: {
+        emoji: "⚡",
+        bgColor: "bg-indigo-500",
+        textColor: "text-indigo-300",
+        name: "Celestial",
+      },
+      [PET_RARITIES.EXOTIC]: {
+        emoji: "🌈",
+        bgColor: "bg-pink-500",
+        textColor: "text-pink-300",
+        name: "Exotic",
+      },
+      [PET_RARITIES.ULTIMATE]: {
+        emoji: "👑",
+        bgColor: "bg-orange-500",
+        textColor: "text-orange-300",
+        name: "Ultimate",
+      },
+      [PET_RARITIES.GODLY]: {
+        emoji: "✨",
+        bgColor: "bg-cyan-500",
+        textColor: "text-cyan-300",
+        name: "Godly",
+      },
+    };
+    return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
+  };
+
+  // Get tier ID for rarity comparison
+  const getTierId = (tier) => {
+    const tierIds = {
+      [PET_RARITIES.COMMON]: 1,
+      [PET_RARITIES.UNCOMMON]: 2,
+      [PET_RARITIES.RARE]: 3,
+      [PET_RARITIES.EPIC]: 4,
+      [PET_RARITIES.LEGENDARY]: 5,
+      [PET_RARITIES.MYTHIC]: 6,
+      [PET_RARITIES.CELESTIAL]: 7,
+      [PET_RARITIES.EXOTIC]: 8,
+      [PET_RARITIES.ULTIMATE]: 9,
+      [PET_RARITIES.GODLY]: 10,
+    };
+    return tierIds[tier] || 0;
+  };
+
+  // Format type for display
+  const formatType = (type) => {
+    const typeNames = {
+      FIRE: { name: "Fire", emoji: "🔥" },
+      WATER: { name: "Water", emoji: "💧" },
+      EARTH: { name: "Earth", emoji: "🌿" },
+      AIR: { name: "Air", emoji: "💨" },
+      ELECTRIC: { name: "Electric", emoji: "⚡" },
+      DRAGON: { name: "Dragon", emoji: "🐉" },
+      PHOENIX: { name: "Phoenix", emoji: "🔥" },
+      UNICORN: { name: "Unicorn", emoji: "🦄" },
+      GRIFFIN: { name: "Griffin", emoji: "🦅" },
+    };
+    return typeNames[type] || { name: type, emoji: "🐾" };
+  };
+
+  const stats = [
+    {
+      icon: User,
+      label: "Total Pets",
+      value: profileStats.totalPets || 0,
+      description: `${profileStats.hatchedEggs || 0} hatched`,
+      color: "text-blue-400",
+    },
+    {
+      icon: Award,
+      label: "Rarest Pet",
+      value: profileStats.rarestPet
+        ? formatTier(profileStats.rarestPet.tier).name
+        : "None",
+      description: profileStats.rarestPet
+        ? profileStats.rarestPet.name
+        : "Hatch some eggs!",
+      color: profileStats.rarestPet
+        ? formatTier(profileStats.rarestPet.tier).textColor
+        : "text-gray-400",
+    },
+    {
+      icon: Coins,
+      label: "Game Coins",
+      value: formatCurrency(user?.coins || 0, "coins"),
+      description: `${user?.freeRolls || 0} free rolls available`,
+      color: "text-yellow-400",
+    },
+    {
+      icon: Sparkles,
+      label: "Collection Power",
+      value: profileStats.highestPower
+        ? `${formatNumber(profileStats.highestPower)}`
+        : "0",
+      description: `Avg: ${
+        profileStats.averagePower ? formatNumber(profileStats.averagePower) : 0
+      }`,
+      color: "text-purple-400",
+    },
+    {
+      icon: Users,
+      label: "Battle Team",
+      value: `${profileStats.battleTeamSize || 0}/3`,
+      description: battleTeam.length === 3 ? "Team Complete" : "Add more pets",
+      color: "text-green-400",
+    },
+    {
+      icon: Trophy,
+      label: "Egg Inventory",
+      value: profileStats.totalEggs || 0,
+      description: `${profileStats.unhatchedEggs || 0} ready to hatch`,
+      color: "text-pink-400",
+    },
+  ];
+
+  const getTierDistribution = () => {
+    if (!profileStats.tierCounts) return [];
+
+    return Object.entries(profileStats.tierCounts)
+      .sort(([a], [b]) => getTierId(a) - getTierId(b))
+      .map(([tier, count]) => ({
+        tier,
+        count,
+        percentage: ((count / pets.length) * 100).toFixed(1),
+        ...formatTier(tier),
+      }));
+  };
+
+  const getAccountTypeInfo = () => {
+    if (user?.isGuest) {
+      return {
+        type: "Guest Account",
+        description: "Temporary account - progress saved for 24 hours",
+        icon: GamepadIcon,
+        color: "from-gray-500 to-gray-700",
+        action: "Create permanent account to save progress forever",
+      };
+    } else if (user?.authMethod === "email") {
+      return {
+        type: "Email Account",
+        description: "Permanent account with email authentication",
+        icon: Mail,
+        color: "from-blue-500 to-purple-600",
+        action: user?.walletAddress
+          ? "Wallet connected"
+          : "Connect wallet for trading",
+      };
+    } else if (user?.authMethod === "wallet") {
+      return {
+        type: "Wallet Account",
+        description: "Blockchain-native account",
+        icon: Shield,
+        color: "from-green-500 to-emerald-600",
+        action: "Full blockchain features enabled",
+      };
+    } else {
+      return {
+        type: "Verified Account",
+        description: "Full-featured account",
+        icon: User,
+        color: "from-purple-500 to-pink-600",
+        action: "All features available",
+      };
+    }
   };
 
   // Not authenticated view
@@ -150,121 +335,6 @@ const Profile = () => {
     );
   }
 
-  const stats = [
-    {
-      icon: User,
-      label: "Total Pets",
-      value: profileStats.totalPets || 0,
-      description: `${profileStats.hatchedEggs || 0} hatched`,
-      color: "text-blue-400",
-    },
-    {
-      icon: Award,
-      label: "Rarest Pet",
-      value: profileStats.rarestPet
-        ? formatTier(profileStats.rarestPet.tier).name
-        : "None",
-      description: profileStats.rarestPet
-        ? profileStats.rarestPet.name
-        : "Hatch some eggs!",
-      color: profileStats.rarestPet
-        ? formatTier(profileStats.rarestPet.tier).textColor
-        : "text-gray-400",
-    },
-    {
-      icon: Coins,
-      label: "Game Coins",
-      value: formatCurrency(user?.coins || 0, "coins"),
-      description: `${user?.freeRolls || 0} free rolls available`,
-      color: "text-yellow-400",
-    },
-    {
-      icon: Zap,
-      label: "Collection Power",
-      value: profileStats.highestPower
-        ? `${formatNumber(profileStats.highestPower)}`
-        : "0",
-      description: `Avg: ${
-        profileStats.averagePower ? formatNumber(profileStats.averagePower) : 0
-      }`,
-      color: "text-purple-400",
-    },
-    {
-      icon: Users,
-      label: "Battle Team",
-      value: `${profileStats.battleTeamSize || 0}/3`,
-      description: battleTeam.length === 3 ? "Team Complete" : "Add more pets",
-      color: "text-green-400",
-    },
-    {
-      icon: Sparkles,
-      label: "Egg Inventory",
-      value: profileStats.totalEggs || 0,
-      description: `${profileStats.unhatchedEggs || 0} ready to hatch`,
-      color: "text-pink-400",
-    },
-  ];
-
-  // Add wallet stats if connected
-  if (hasWallet) {
-    stats.splice(2, 0, {
-      icon: Shield,
-      label: "Wallet Balance",
-      value: formatCurrency(walletBalance, "ETH", 4),
-      description: `${formatCurrency(tokenBalance, "coins")} tokens`,
-      color: "text-green-400",
-    });
-  }
-
-  const getTierDistribution = () => {
-    if (!profileStats.tierCounts) return [];
-
-    return Object.entries(profileStats.tierCounts)
-      .sort(([a], [b]) => (TIERS[a]?.id || 0) - (TIERS[b]?.id || 0))
-      .map(([tier, count]) => ({
-        tier,
-        count,
-        percentage: ((count / pets.length) * 100).toFixed(1),
-        ...formatTier(tier),
-      }));
-  };
-
-  const getAccountTypeInfo = () => {
-    if (user.isGuest) {
-      return {
-        type: "Guest Account",
-        description: "Temporary account - progress saved for 24 hours",
-        icon: GamepadIcon,
-        color: "from-gray-500 to-gray-700",
-        action: "Create permanent account to save progress forever",
-      };
-    } else if (user.authMethod === "email") {
-      return {
-        type: "Email Account",
-        description: "Permanent account with email authentication",
-        icon: Mail,
-        color: "from-blue-500 to-purple-600",
-        action: hasWallet ? "Wallet connected" : "Connect wallet for trading",
-      };
-    } else if (user.authMethod === "wallet") {
-      return {
-        type: "Wallet Account",
-        description: "Blockchain-native account",
-        icon: Shield,
-        color: "from-green-500 to-emerald-600",
-        action: "Full blockchain features enabled",
-      };
-    } else {
-      return {
-        type: "Verified Account",
-        description: "Full-featured account",
-        icon: User,
-        color: "from-purple-500 to-pink-600",
-        action: "All features available",
-      };
-    }
-  };
-
   const accountInfo = getAccountTypeInfo();
   const AccountIcon = accountInfo.icon;
 
@@ -281,7 +351,7 @@ const Profile = () => {
                 >
                   <AccountIcon className="w-8 h-8" />
                 </div>
-                {user.level && (
+                {user?.level && (
                   <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">
                     Lvl {user.level}
                   </div>
@@ -290,7 +360,7 @@ const Profile = () => {
               <div>
                 <div className="flex items-center space-x-3 mb-2">
                   <h1 className="text-3xl font-bold text-white">
-                    {user.username || "Anonymous Player"}
+                    {user?.username || "Anonymous Player"}
                   </h1>
                   <span
                     className={`bg-gradient-to-r ${accountInfo.color} text-white text-xs px-3 py-1 rounded-full`}
@@ -299,14 +369,14 @@ const Profile = () => {
                   </span>
                 </div>
                 <p className="text-gray-400 mb-2">{accountInfo.description}</p>
-                {user.walletAddress ? (
+                {user?.walletAddress ? (
                   <p className="text-gray-400 font-mono text-sm">
                     {`${user.walletAddress.slice(
                       0,
                       8
                     )}...${user.walletAddress.slice(-6)}`}
                   </p>
-                ) : user.email ? (
+                ) : user?.email ? (
                   <p className="text-gray-400 text-sm">{user.email}</p>
                 ) : (
                   <p className="text-gray-500 text-sm">
@@ -315,7 +385,7 @@ const Profile = () => {
                 )}
 
                 {/* Experience Bar */}
-                {user.experience !== undefined && (
+                {user?.experience !== undefined && (
                   <div className="mt-3 max-w-md">
                     <div className="flex justify-between text-xs text-gray-400 mb-1">
                       <span>Level {user.level || 1} Progress</span>
@@ -348,25 +418,16 @@ const Profile = () => {
                 <p className="text-gray-400 text-sm mb-2">
                   {accountInfo.action}
                 </p>
-                {user.isGuest && (
+                {user?.isGuest && (
                   <button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all">
                     Upgrade to Permanent Account
-                  </button>
-                )}
-                {!hasWallet && !user.isGuest && (
-                  <button
-                    onClick={connectWallet}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2"
-                  >
-                    <Shield className="w-4 h-4" />
-                    <span>Connect Wallet</span>
                   </button>
                 )}
               </div>
 
               {/* Quick Stats */}
               <div className="flex items-center space-x-4">
-                {user.coins !== undefined && (
+                {user?.coins !== undefined && (
                   <div className="flex items-center space-x-2 bg-yellow-500 bg-opacity-20 px-4 py-2 rounded-lg">
                     <Coins className="w-5 h-5 text-yellow-400" />
                     <span className="text-white font-bold">
@@ -375,7 +436,7 @@ const Profile = () => {
                   </div>
                 )}
 
-                {user.freeRolls !== undefined && (
+                {user?.freeRolls !== undefined && (
                   <div className="flex items-center space-x-2 bg-green-500 bg-opacity-20 px-4 py-2 rounded-lg">
                     <Sparkles className="w-5 h-5 text-green-400" />
                     <span className="text-white font-bold">
@@ -587,7 +648,7 @@ const Profile = () => {
                   <Sparkles className="w-5 h-5" />
                   <span>Visit Hatchery</span>
                 </button>
-                {user.isGuest && (
+                {user?.isGuest && (
                   <p className="text-gray-500 text-sm">
                     🕒 Guest accounts save progress for 24 hours
                   </p>

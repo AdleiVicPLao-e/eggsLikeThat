@@ -17,6 +17,13 @@
     "winston": "^3.10.0"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "compile": "hardhat compile",
+    "deploy:amoy": "hardhat run scripts/deploy.js --network amoy",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "test-contracts": "hardhat run scripts/test-contracts.js",
+    "node": "hardhat node",
+    "test": "hardhat test"
   }
 }

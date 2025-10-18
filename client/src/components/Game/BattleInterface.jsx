@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from "react";
 import PetCard from "../Pets/PetCard";
 
 const BattleInterface = ({ playerPets, opponentPets, onBattleComplete }) => {

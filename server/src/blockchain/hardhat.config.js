@@ -3,20 +3,52 @@ require("@nomiclabs/hardhat-waffle");
 require("dotenv").config();
 
 module.exports = {
-  solidity: "0.8.19",
-  networks: {
-    mumbai: {
-      url: process.env.MUMBAI_RPC_URL || "https://rpc-mumbai.maticvigil.com",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      gas: 2100000,
-      gasPrice: 8000000000,
-    },
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+  solidity: {
+    version: "0.8.19",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
     },
   },
-  etherscan: {
-    apiKey: process.env.POLYGONSCAN_API_KEY,
+  networks: {
+    // Ethereum Sepolia Testnet
+    sepolia: {
+      url: process.env.ETH_SEPOLIA_RPC_URL,
+      accounts: process.env.BLOCKCHAIN_PRIVATE_KEY
+        ? [process.env.BLOCKCHAIN_PRIVATE_KEY]
+        : [],
+      chainId: 11155111,
+      gas: 2100000,
+      gasPrice: 25000000000, // 25 gwei
+      timeout: 60000,
+    },
+    // Polygon Amoy Testnet
+    amoy: {
+      url: process.env.POLYGON_AMOY_TESTNET_RPC_URL,
+      accounts: process.env.BLOCKCHAIN_PRIVATE_KEY
+        ? [process.env.BLOCKCHAIN_PRIVATE_KEY]
+        : [],
+      chainId: 80002,
+      gas: 2100000,
+      gasPrice: 30000000000, // 30 gwei
+      timeout: 60000,
+    },
+    // Local development
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainId: 31337,
+    },
+  },
+  // Remove etherscan configuration since we don't have API keys
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts",
+  },
+  mocha: {
+    timeout: 40000,
   },
 };
