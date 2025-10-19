@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
 
   // Blockchain identity
   walletAddress: { type: String, unique: true, sparse: true },
-  encryptedPrivateKey: { type: String }, // Encrypted in production
+  encryptedPrivateKey: { type: String },
 
   // Game assets (references to other collections)
   petIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
@@ -22,21 +22,33 @@ const userSchema = new mongoose.Schema({
   level: { type: Number, default: 1 },
   experience: { type: Number, default: 0 },
   rank: { type: String, default: "Beginner" },
+  battlesWon: { type: Number, default: 0 },
+  battlesLost: { type: Number, default: 0 },
+  completedQuests: [
+    {
+      questId: String,
+      completedAt: { type: Date, default: Date.now },
+      rewards: Object,
+    },
+  ],
+  consecutiveDays: { type: Number, default: 1 },
+  lastDailyClaim: { type: Date, default: null },
+  lastFreeHatch: { type: Date, default: null },
 
   // Blockchain tracking
   nftTokens: [
     {
       tokenId: String,
       contractAddress: String,
-      tokenType: String, // 'pet' or 'egg'
-      petId: { type: mongoose.Schema.Types.ObjectId, ref: "Pet" }, // Reference if it's a pet
+      tokenType: String,
+      petId: { type: mongoose.Schema.Types.ObjectId, ref: "Pet" },
       metadata: Object,
     },
   ],
 
   transactions: [
     {
-      type: { type: String, required: true }, // MINT_PET, TRANSFER, LIST, BUY
+      type: { type: String, required: true },
       tokenId: String,
       txHash: String,
       from: String,
@@ -94,6 +106,8 @@ const petSchema = new mongoose.Schema({
   experience: { type: Number, default: 0 },
   evolutionStage: { type: Number, default: 1 },
   evolutions: [{ type: String }],
+  battlesWon: { type: Number, default: 0 },
+  battlesLost: { type: Number, default: 0 },
 
   // Cosmetics
   title: { type: String, default: null },
@@ -117,29 +131,13 @@ const eggSchema = new mongoose.Schema({
   },
   type: { type: String, required: true },
   isHatched: { type: Boolean, default: false },
-  contents: { type: Object, default: null }, // Pet, Technique, or Skin data
+  contents: { type: Object, default: null },
+  hatchDuration: { type: Number, default: 60 },
+  cost: { type: Number, default: 100 },
+  description: { type: String, default: "A mysterious egg" },
   nftTokenId: { type: String, default: null },
   isListed: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
-});
-
-// Marketplace Listing Schema
-const listingSchema = new mongoose.Schema({
-  sellerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
-  itemType: { type: String, required: true }, // 'pet' or 'egg'
-  itemId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Pet._id or Egg._id
-  nftContract: { type: String, required: true },
-  tokenId: { type: String, required: true },
-  price: { type: Number, required: true },
-  currency: { type: String, default: "IN_GAME" }, // IN_GAME or CRYPTO
-  isActive: { type: Boolean, default: true },
-  createdAt: { type: Date, default: Date.now },
-  soldAt: { type: Date, default: null },
-  buyerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
 });
 
 // Technique Schema
@@ -169,10 +167,28 @@ const skinSchema = new mongoose.Schema({
   obtainedAt: { type: Date, default: Date.now },
 });
 
+// Battle History Schema
+const battleHistorySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  result: { type: String, required: true }, // victory or defeat
+  opponent: { type: String, required: true },
+  userPets: [{ type: mongoose.Schema.Types.ObjectId, ref: "Pet" }],
+  rewards: { type: Object, default: {} },
+  battleData: { type: Object, default: {} },
+  date: { type: Date, default: Date.now },
+});
+
 // Create models
 export const User = mongoose.model("User", userSchema);
 export const Pet = mongoose.model("Pet", petSchema);
 export const Egg = mongoose.model("Egg", eggSchema);
-export const Listing = mongoose.model("Listing", listingSchema);
 export const Technique = mongoose.model("Technique", techniqueSchema);
 export const Skin = mongoose.model("Skin", skinSchema);
+export const BattleHistory = mongoose.model(
+  "BattleHistory",
+  battleHistorySchema
+);

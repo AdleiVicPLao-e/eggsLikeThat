@@ -7,7 +7,7 @@ import {
   offerCreationSchema,
   counterOfferSchema,
 } from "../utils/validators.js";
-import { authenticate, requireWallet } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
@@ -17,7 +17,7 @@ router.get("/listings", TradeController.getListings);
 router.get("/stats", TradeController.getMarketplaceStats);
 
 // Protected routes
-router.use(authenticate);
+router.use(authMiddleware);
 
 // User's listings, history, and transactions
 router.get("/my-listings", TradeController.getUserListings);
@@ -26,15 +26,15 @@ router.get("/transactions", TradeController.getTransactionHistory);
 
 // Offer management
 router.get("/offers", TradeController.getUserOffers);
-router.get(
-  "/offers/:offerId/negotiation",
-  TradeController.getNegotiationHistory
-);
+// router.get(
+//   "/offers/:offerId/negotiation",
+//   TradeController.getNegotiationHistory
+// );
 
 // Trading actions (require wallet)
 router.post(
   "/list",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   validate(tradeCreationSchema),
   TradeController.listPet
@@ -42,14 +42,14 @@ router.post(
 
 router.delete(
   "/list/:tradeId",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   TradeController.cancelListing
 );
 
 router.post(
   "/purchase/:tradeId",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   TradeController.purchasePet
 );
@@ -57,7 +57,7 @@ router.post(
 // Offer actions (require wallet)
 router.post(
   "/offer",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   validate(offerCreationSchema),
   TradeController.makeOffer
@@ -65,21 +65,21 @@ router.post(
 
 router.post(
   "/offer/:offerId/accept",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   TradeController.acceptOffer
 );
 
 router.post(
   "/offer/:offerId/reject",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   TradeController.rejectOffer
 );
 
 router.post(
   "/offer/:offerId/counter",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   validate(counterOfferSchema),
   TradeController.counterOffer
@@ -87,14 +87,14 @@ router.post(
 
 router.delete(
   "/offer/:offerId",
-  requireWallet,
+  authMiddleware,
   gameActionLimiter,
   TradeController.cancelOffer
 );
 
-// Additional trade routes
-router.get("/analytics/overview", TradeController.getTradeAnalytics);
-router.get("/search", TradeController.searchListings);
-router.get("/categories", TradeController.getTradeCategories);
+// // Additional trade routes
+// router.get("/analytics/overview", TradeController.getTradeAnalytics);
+// router.get("/search", TradeController.searchListings);
+// router.get("/categories", TradeController.getTradeCategories);
 
 export default router;

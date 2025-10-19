@@ -1,5 +1,5 @@
-import Egg from "../models/Egg.js";
-import User from "../models/User.js";
+import { Egg } from "../models/Egg.js";
+import { User } from "../models/User.js";
 import { serverRNGService } from "../services/RNGService.js";
 import logger from "../utils/logger.js";
 

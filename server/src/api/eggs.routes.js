@@ -1,13 +1,13 @@
 // routes/egg.route.js
 import express from "express";
 import { EggController } from "../controllers/EggController.js";
-import { authenticate } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authMiddleware);
 
 // Get user's eggs
 router.get("/", EggController.getUserEggs);

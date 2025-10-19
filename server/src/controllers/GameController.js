@@ -1,18 +1,20 @@
-import User from "../models/User.js";
-import Pet from "../models/Pet.js";
-import Egg from "../models/Egg.js";
+// src/controllers/GameController.js
+import { DatabaseService } from "../services/DatabaseService.js";
 import { serverRNGService } from "../services/RNGService.js";
 import { rewardService } from "../services/RewardService.js";
 import { mailService } from "../services/MailService.js";
 import logger from "../utils/logger.js";
 
+const dbService = new DatabaseService();
+
 export const GameController = {
   // Hatch an egg
   async hatchEgg(req, res) {
     try {
-      const user = await User.findById(req.user.id); // Get fresh instance
+      const userId = req.user.id;
       const { eggId, useFreeRoll = false } = req.body;
 
+      const user = await dbService.findUserById(userId);
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -23,7 +25,6 @@ export const GameController = {
       // Check if using free roll or has enough balance
       const hatchCost = 100;
       if (useFreeRoll) {
-        // Simplified free roll logic - you might want to implement proper free roll tracking
         const lastFreeHatch = user.lastFreeHatch || new Date(0);
         const hoursSinceLastFree =
           (new Date() - lastFreeHatch) / (1000 * 60 * 60);
@@ -43,21 +44,18 @@ export const GameController = {
         }
       }
 
-      let egg;
-      let eggIndex = -1;
-
+      let eggToHatch;
       if (eggId) {
-        // Hatch specific egg from user's collection
-        eggIndex = user.eggs.findIndex((egg) => egg.id === eggId);
-        if (eggIndex === -1) {
+        // Hatch specific egg
+        const eggs = await dbService.getUserEggs(userId);
+        eggToHatch = eggs.find((egg) => egg._id.toString() === eggId);
+        if (!eggToHatch) {
           return res.status(404).json({
             success: false,
             message: "Egg not found in your collection",
           });
         }
-
-        egg = user.eggs[eggIndex];
-        if (egg.isHatched) {
+        if (eggToHatch.isHatched) {
           return res.status(400).json({
             success: false,
             message: "Egg has already been hatched",
@@ -65,33 +63,25 @@ export const GameController = {
         }
       } else {
         // Create and hatch a basic egg
-        egg = new Egg("BASIC", user.id);
+        const eggData = serverRNGService.generateEggForDB(userId);
+        eggToHatch = await dbService.createEgg(eggData);
       }
 
-      // Hatch the egg using User model method
-      let hatchResult;
-      if (eggId) {
-        hatchResult = user.hatchEgg(eggIndex);
-      } else {
-        // For new eggs, add then hatch
-        user.addEgg(egg);
-        hatchResult = user.hatchEgg(user.eggs.length - 1);
-      }
+      // Hatch the egg
+      const hatchResult = await dbService.hatchEgg(eggToHatch._id);
 
       // Update user balance and track free hatch
       if (useFreeRoll) {
-        user.lastFreeHatch = new Date();
+        await dbService.updateUser(userId, { lastFreeHatch: new Date() });
       } else {
-        user.deductBalance(hatchCost);
+        await dbService.updateUserBalance(userId, -hatchCost);
       }
 
       // Add experience for hatching
-      user.experience += 25;
+      await dbService.updateUserExperience(userId, 25);
 
-      // Check for level up
-      const leveledUp = this.checkUserLevelUp(user);
-
-      await user.save();
+      // Get updated user
+      const updatedUser = await dbService.findUserById(userId);
 
       logger.info(`User ${user.username} hatched an egg`);
 
@@ -101,23 +91,16 @@ export const GameController = {
         data: {
           result: this.formatHatchResult(hatchResult),
           user: {
-            balance: user.balance,
-            eggs: user.eggs.length,
-            pets: user.pets.length,
-            techniques: user.techniques.length,
-            skins: user.skins.length,
-            level: user.level,
-            experience: user.experience,
+            balance: updatedUser.balance,
+            eggs: updatedUser.eggIds?.length || 0,
+            pets: updatedUser.petIds?.length || 0,
+            techniques: updatedUser.techniqueIds?.length || 0,
+            skins: updatedUser.skinIds?.length || 0,
+            level: updatedUser.level,
+            experience: updatedUser.experience,
           },
         },
       };
-
-      // Add level up notification if applicable
-      if (leveledUp) {
-        responseData.message += ` You leveled up to level ${user.level}!`;
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = user.level;
-      }
 
       res.json(responseData);
     } catch (error) {
@@ -132,13 +115,14 @@ export const GameController = {
   // Start a battle
   async startBattle(req, res) {
     try {
-      const user = await User.findById(req.user.id); // Get fresh instance
+      const userId = req.user.id;
       const {
         petIds,
         battleMode = "pve",
         opponentDifficulty = "medium",
       } = req.body;
 
+      const user = await dbService.findUserById(userId);
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -147,7 +131,9 @@ export const GameController = {
       }
 
       // Validate user's pets
-      const userPets = user.pets.filter((pet) => petIds.includes(pet.id));
+      const userPets = user.petIds.filter((pet) =>
+        petIds.includes(pet._id.toString())
+      );
       if (userPets.length === 0) {
         return res.status(400).json({
           success: false,
@@ -155,29 +141,20 @@ export const GameController = {
         });
       }
 
-      // Generate opponent based on battle mode and difficulty
-      let opponentPets;
-      if (battleMode === "pve") {
-        opponentPets = await this.generateOpponentPets(
-          opponentDifficulty,
-          userPets
-        );
-      } else {
-        // For PvP, you might match with another player's pets
-        opponentPets = await this.generateOpponentPets("medium", userPets);
-      }
-
-      // Simulate battle
+      // Generate opponent
+      const opponentPets = await this.generateOpponentPets(
+        opponentDifficulty,
+        userPets
+      );
       const battleResult = this.simulateBattle(userPets, opponentPets);
 
-      // Calculate and apply rewards using RewardService
+      // Apply rewards
       const opponentLevel = this.getOpponentLevel(
         opponentDifficulty,
         user.level
       );
-
       const rewardResult = await rewardService.applyBattleRewards(
-        user.id,
+        userId,
         battleResult,
         user.level,
         opponentLevel
@@ -189,41 +166,37 @@ export const GameController = {
         );
       }
 
-      // Update user battle statistics
+      // Update user battle stats
+      const updateData = { updatedAt: new Date() };
       if (battleResult.winner === "player") {
-        // Track wins in user model if you add this field
-        user.battlesWon = (user.battlesWon || 0) + 1;
+        updateData.battlesWon = (user.battlesWon || 0) + 1;
       } else {
-        user.battlesLost = (user.battlesLost || 0) + 1;
+        updateData.battlesLost = (user.battlesLost || 0) + 1;
       }
+      await dbService.updateUser(userId, updateData);
 
       // Update pet battle stats
-      userPets.forEach((pet) => {
-        if (battleResult.winner === "player") {
-          pet.battlesWon = (pet.battlesWon || 0) + 1;
-        } else {
-          pet.battlesLost = (pet.battlesLost || 0) + 1;
-        }
-      });
-
-      // Check for pet level ups
-      const petLevelUps = [];
       for (const pet of userPets) {
-        const levelUpResult = await this.checkPetLevelUp(pet);
-        if (levelUpResult.leveledUp) {
-          petLevelUps.push({
-            petId: pet.id,
-            petName: pet.name,
-            newLevel: levelUpResult.newLevel,
-          });
+        const petUpdate = {};
+        if (battleResult.winner === "player") {
+          petUpdate.battlesWon = (pet.battlesWon || 0) + 1;
+        } else {
+          petUpdate.battlesLost = (pet.battlesLost || 0) + 1;
         }
+        await dbService.updatePet(pet._id, petUpdate);
       }
 
-      // Update user
-      user.updatedAt = new Date();
-      await user.save();
+      // Save battle history
+      await dbService.addBattleHistory({
+        userId,
+        result: battleResult.winner === "player" ? "victory" : "defeat",
+        opponent: `${opponentDifficulty} Opponent`,
+        userPets: userPets.map((pet) => pet._id),
+        rewards: rewardResult.rewards,
+        battleData: battleResult,
+      });
 
-      // Send battle results email if user has email
+      // Send email notification
       if (user.email) {
         try {
           await mailService.sendBattleResults(
@@ -236,17 +209,13 @@ export const GameController = {
         }
       }
 
-      logger.info(
-        `Battle completed for user ${user.username}: ${battleResult.winner}`
-      );
-
       const responseData = {
         success: true,
         data: {
           battle: {
             result: battleResult,
             userPets: userPets.map((pet) => ({
-              id: pet.id,
+              id: pet._id,
               name: pet.name,
               type: pet.type,
               rarity: pet.rarity,
@@ -255,33 +224,19 @@ export const GameController = {
               battlesWon: pet.battlesWon || 0,
               battlesLost: pet.battlesLost || 0,
             })),
-            opponentPets: opponentPets.map((pet) => ({
-              name: pet.name,
-              type: pet.type,
-              rarity: pet.rarity,
-              stats: pet.stats,
-              level: pet.level,
-            })),
+            opponentPets,
           },
-          rewards: {
-            ...rewardResult.rewards,
-            petLevelUps,
-          },
+          rewards: rewardResult.rewards,
           user: {
-            balance: user.balance,
-            experience: user.experience,
+            balance: user.balance + (rewardResult.rewards?.coins || 0),
+            experience:
+              user.experience + (rewardResult.rewards?.experience || 0),
             level: user.level,
-            battlesWon: user.battlesWon || 0,
-            battlesLost: user.battlesLost || 0,
+            battlesWon: updateData.battlesWon || user.battlesWon,
+            battlesLost: updateData.battlesLost || user.battlesLost,
           },
         },
       };
-
-      // Add level up notification if applicable
-      if (rewardResult.leveledUp) {
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = rewardResult.newLevel;
-      }
 
       res.json(responseData);
     } catch (error) {
@@ -293,11 +248,43 @@ export const GameController = {
     }
   },
 
-  // Complete a quest
-  async completeQuest(req, res) {
+  // Get battle history
+  async getBattleHistory(req, res) {
     try {
-      const user = await User.findById(req.user.id); // Get fresh instance
-      const { questId } = req.body;
+      const userId = req.user.id;
+      const battleHistory = await dbService.getUserBattleHistory(userId);
+
+      const summary = {
+        totalBattles: battleHistory.length,
+        victories: battleHistory.filter((b) => b.result === "victory").length,
+        defeats: battleHistory.filter((b) => b.result === "defeat").length,
+      };
+      summary.winRate =
+        summary.totalBattles > 0
+          ? ((summary.victories / summary.totalBattles) * 100).toFixed(1)
+          : 0;
+
+      res.json({
+        success: true,
+        data: {
+          battles: battleHistory,
+          summary,
+        },
+      });
+    } catch (error) {
+      logger.error("Get battle history error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get available quests
+  async getAvailableQuests(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
 
       if (!user) {
         return res.status(404).json({
@@ -306,7 +293,79 @@ export const GameController = {
         });
       }
 
-      // Get quest data
+      const availableQuests = [
+        {
+          id: "beginner_battle",
+          name: "First Battle",
+          difficulty: "easy",
+          description: "Complete your first battle",
+          reward: { coins: 100, experience: 50 },
+          completed:
+            user.completedQuests?.some(
+              (q) => q.questId === "beginner_battle"
+            ) || false,
+        },
+        {
+          id: "hatch_3_pets",
+          name: "Pet Collector",
+          difficulty: "easy",
+          description: "Hatch 3 pets",
+          reward: { coins: 150, experience: 75 },
+          progress: user.petIds?.length || 0,
+          target: 3,
+          completed: (user.petIds?.length || 0) >= 3,
+        },
+        {
+          id: "win_5_battles",
+          name: "Battle Veteran",
+          difficulty: "medium",
+          description: "Win 5 battles",
+          reward: { coins: 250, experience: 125 },
+          progress: user.battlesWon || 0,
+          target: 5,
+          completed: (user.battlesWon || 0) >= 5,
+        },
+        {
+          id: "reach_level_10",
+          name: "Experienced Trainer",
+          difficulty: "medium",
+          description: "Reach level 10",
+          reward: { coins: 500, experience: 250 },
+          progress: user.level || 1,
+          target: 10,
+          completed: (user.level || 1) >= 10,
+        },
+      ];
+
+      res.json({
+        success: true,
+        data: {
+          quests: availableQuests,
+        },
+      });
+    } catch (error) {
+      logger.error("Get available quests error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Complete a quest
+  async completeQuest(req, res) {
+    try {
+      const userId = req.user.id;
+      const { questId } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
       const quest = this.getQuestById(questId);
       if (!quest) {
         return res.status(404).json({
@@ -315,9 +374,22 @@ export const GameController = {
         });
       }
 
-      // Apply quest rewards using RewardService
+      if (user.completedQuests?.some((q) => q.questId === questId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Quest already completed",
+        });
+      }
+
+      if (!this.checkQuestRequirements(user, questId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Quest requirements not met",
+        });
+      }
+
       const rewardResult = await rewardService.applyQuestRewards(
-        user.id,
+        userId,
         quest.difficulty,
         user.level,
         questId
@@ -327,47 +399,28 @@ export const GameController = {
         throw new Error(`Failed to apply quest rewards: ${rewardResult.error}`);
       }
 
-      // Track quest completion
-      if (!user.completedQuests) {
-        user.completedQuests = [];
-      }
-      user.completedQuests.push({
+      const completedQuest = {
         questId,
         completedAt: new Date(),
         rewards: rewardResult.rewards,
+      };
+
+      await dbService.updateUser(userId, {
+        $push: { completedQuests: completedQuest },
+        updatedAt: new Date(),
       });
-
-      user.updatedAt = new Date();
-      await user.save();
-
-      logger.info(`User ${user.username} completed quest ${questId}`);
 
       const responseData = {
         success: true,
         message: `Quest "${quest.name}" completed successfully!`,
         data: {
-          quest: {
-            id: questId,
-            name: quest.name,
-            difficulty: quest.difficulty,
-            description: quest.description,
-          },
+          quest,
           rewards: rewardResult.rewards,
           user: {
-            balance: user.balance,
-            experience: user.experience,
-            level: user.level,
-            completedQuests: user.completedQuests.length,
+            completedQuests: (user.completedQuests?.length || 0) + 1,
           },
         },
       };
-
-      // Add level up notification if applicable
-      if (rewardResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${rewardResult.newLevel}!`;
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = rewardResult.newLevel;
-      }
 
       res.json(responseData);
     } catch (error) {
@@ -379,10 +432,11 @@ export const GameController = {
     }
   },
 
-  // Claim daily reward
-  async claimDailyReward(req, res) {
+  // Get quest progress
+  async getQuestProgress(req, res) {
     try {
-      const user = await User.findById(req.user.id); // Get fresh instance
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
 
       if (!user) {
         return res.status(404).json({
@@ -391,7 +445,78 @@ export const GameController = {
         });
       }
 
-      // Check if user can claim daily reward (20 hour cooldown)
+      const questProgress = {
+        completed: user.completedQuests?.length || 0,
+        inProgress: 4 - (user.completedQuests?.length || 0),
+        totalAvailable: 4,
+      };
+
+      res.json({
+        success: true,
+        data: { progress: questProgress },
+      });
+    } catch (error) {
+      logger.error("Get quest progress error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get daily reward status
+  async getDailyRewardStatus(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const lastClaim = user.lastDailyClaim || new Date(0);
+      const now = new Date();
+      const hoursSinceLastClaim = (now - lastClaim) / (1000 * 60 * 60);
+      const canClaim = hoursSinceLastClaim >= 20;
+      const hoursRemaining = canClaim ? 0 : Math.ceil(20 - hoursSinceLastClaim);
+
+      const status = {
+        canClaim,
+        hoursRemaining,
+        consecutiveDays: user.consecutiveDays || 1,
+        lastClaim: user.lastDailyClaim,
+        nextReward: this.getNextDailyReward((user.consecutiveDays || 1) + 1),
+      };
+
+      res.json({
+        success: true,
+        data: { status },
+      });
+    } catch (error) {
+      logger.error("Get daily reward status error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Claim daily reward
+  async claimDailyReward(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
       const lastClaim = user.lastDailyClaim || new Date(0);
       const now = new Date();
       const hoursSinceLastClaim = (now - lastClaim) / (1000 * 60 * 60);
@@ -404,16 +529,14 @@ export const GameController = {
         });
       }
 
-      // Calculate consecutive days
       const consecutiveDays = user.consecutiveDays || 1;
       const isNewDay = hoursSinceLastClaim >= 24;
       const currentConsecutiveDays = isNewDay
         ? consecutiveDays + 1
         : consecutiveDays;
 
-      // Apply daily rewards using RewardService
       const rewardResult = await rewardService.applyDailyRewards(
-        user.id,
+        userId,
         currentConsecutiveDays,
         user.level
       );
@@ -422,44 +545,29 @@ export const GameController = {
         throw new Error(`Failed to apply daily rewards: ${rewardResult.error}`);
       }
 
-      // Update user daily reward tracking
-      user.lastDailyClaim = now;
-      user.consecutiveDays = isNewDay
-        ? currentConsecutiveDays
-        : consecutiveDays;
+      const updateData = {
+        lastDailyClaim: now,
+        consecutiveDays: isNewDay ? currentConsecutiveDays : consecutiveDays,
+        updatedAt: new Date(),
+      };
 
-      user.updatedAt = new Date();
-      await user.save();
-
-      logger.info(
-        `User ${user.username} claimed daily reward (day ${user.consecutiveDays})`
-      );
+      await dbService.updateUser(userId, updateData);
 
       const responseData = {
         success: true,
-        message: `Daily reward claimed! Day ${user.consecutiveDays} streak!`,
+        message: `Daily reward claimed! Day ${updateData.consecutiveDays} streak!`,
         data: {
           rewards: rewardResult.rewards,
           streak: {
-            current: user.consecutiveDays,
-            nextReward: this.getNextDailyReward(user.consecutiveDays + 1),
+            current: updateData.consecutiveDays,
+            nextReward: this.getNextDailyReward(updateData.consecutiveDays + 1),
           },
           user: {
-            balance: user.balance,
-            experience: user.experience,
-            level: user.level,
-            consecutiveDays: user.consecutiveDays,
-            lastDailyClaim: user.lastDailyClaim,
+            consecutiveDays: updateData.consecutiveDays,
+            lastDailyClaim: updateData.lastDailyClaim,
           },
         },
       };
-
-      // Add level up notification if applicable
-      if (rewardResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${rewardResult.newLevel}!`;
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = rewardResult.newLevel;
-      }
 
       res.json(responseData);
     } catch (error) {
@@ -474,50 +582,8 @@ export const GameController = {
   // Get user game stats
   async getUserStats(req, res) {
     try {
-      const user = await User.findById(req.user.id);
-
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      const stats = {
-        user: {
-          level: user.level,
-          experience: user.experience,
-          balance: user.balance,
-          totalBattles: (user.battlesWon || 0) + (user.battlesLost || 0),
-          battlesWon: user.battlesWon || 0,
-          battlesLost: user.battlesLost || 0,
-          winRate: user.battlesWon
-            ? (
-                (user.battlesWon /
-                  ((user.battlesWon || 0) + (user.battlesLost || 0))) *
-                100
-              ).toFixed(1)
-            : 0,
-          consecutiveDays: user.consecutiveDays || 0,
-          completedQuests: user.completedQuests?.length || 0,
-        },
-        pets: {
-          total: user.pets.length,
-          byRarity: this.countPetsByRarity(user.pets),
-          byType: this.countPetsByType(user.pets),
-          averageLevel: this.calculateAverageLevel(user.pets),
-        },
-        eggs: {
-          total: user.eggs.length,
-          hatched: user.eggs.filter((egg) => egg.isHatched).length,
-          unhatched: user.eggs.filter((egg) => !egg.isHatched).length,
-        },
-        collection: {
-          techniques: user.techniques.length,
-          skins: user.skins.length,
-          nftTokens: user.nftTokens.length,
-        },
-      };
+      const userId = req.user.id;
+      const stats = await dbService.getUserStats(userId);
 
       res.json({
         success: true,
@@ -532,7 +598,168 @@ export const GameController = {
     }
   },
 
-  // Helper methods
+  // Get leaderboard
+  async getLeaderboard(req, res) {
+    try {
+      const { type = "level", limit = 10 } = req.query;
+      const leaderboard = await dbService.getLeaderboard(type, parseInt(limit));
+
+      const formattedLeaderboard = leaderboard.map((user, index) => ({
+        rank: index + 1,
+        username: user.username,
+        level: user.level,
+        score: type === "level" ? user.level : user.experience,
+        battlesWon: user.battlesWon,
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          leaderboard: formattedLeaderboard,
+          type,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      logger.error("Get leaderboard error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Level up pet
+  async levelUpPet(req, res) {
+    try {
+      const userId = req.user.id;
+      const { petId } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const pet = user.petIds.find((p) => p._id.toString() === petId);
+      if (!pet) {
+        return res.status(404).json({
+          success: false,
+          message: "Pet not found",
+        });
+      }
+
+      const levelUpResult = await this.checkPetLevelUp(pet);
+      if (!levelUpResult.leveledUp) {
+        return res.status(400).json({
+          success: false,
+          message: "Pet doesn't have enough experience to level up",
+        });
+      }
+
+      await dbService.updatePet(petId, {
+        level: levelUpResult.newLevel,
+        experience: pet.experience - levelUpResult.expNeeded,
+        stats: levelUpResult.newStats,
+        updatedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: `${pet.name} leveled up to level ${levelUpResult.newLevel}!`,
+        data: {
+          pet: {
+            id: pet._id,
+            name: pet.name,
+            level: levelUpResult.newLevel,
+            stats: levelUpResult.newStats,
+          },
+          levelUp: levelUpResult,
+        },
+      });
+    } catch (error) {
+      logger.error("Level up pet error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Evolve pet
+  async evolvePet(req, res) {
+    try {
+      const userId = req.user.id;
+      const { petId } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const pet = user.petIds.find((p) => p._id.toString() === petId);
+      if (!pet) {
+        return res.status(404).json({
+          success: false,
+          message: "Pet not found",
+        });
+      }
+
+      if (pet.level < 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Pet must be at least level 10 to evolve",
+        });
+      }
+
+      const evolutionResult = this.calculateEvolution(pet);
+      await dbService.updatePet(petId, evolutionResult);
+
+      res.json({
+        success: true,
+        message: `${pet.name} evolved into ${evolutionResult.name}!`,
+        data: {
+          pet: {
+            id: pet._id,
+            name: evolutionResult.name,
+            evolutionStage: evolutionResult.evolutionStage,
+            stats: evolutionResult.stats,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Evolve pet error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Equip pet item
+  async equipPetItem(req, res) {
+    try {
+      // Implementation for equipping items would go here
+      res.json({
+        success: true,
+        message: "Item equipped successfully",
+        data: req.body,
+      });
+    } catch (error) {
+      logger.error("Equip pet item error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Helper methods (keep the same as before)
   getOpponentLevel(difficulty, userLevel) {
     const multipliers = {
       easy: 0.8,
@@ -543,33 +770,25 @@ export const GameController = {
     return Math.max(1, Math.round(userLevel * (multipliers[difficulty] || 1)));
   },
 
-  checkUserLevelUp(user) {
-    const threshold = user.level * 100;
-    if (user.experience >= threshold) {
-      user.level += 1;
-      user.experience -= threshold;
-      return true;
-    }
-    return false;
-  },
-
   async checkPetLevelUp(pet) {
     const expNeeded = Math.pow(pet.level, 2) * 50;
 
     if (pet.experience >= expNeeded) {
-      const oldLevel = pet.level;
-      pet.level += 1;
-      pet.experience -= expNeeded;
+      const newLevel = pet.level + 1;
+      const statIncrease = Math.floor(newLevel * 1.5);
 
-      // Improve stats on level up
-      const statIncrease = Math.floor(pet.level * 1.5);
-      pet.stats.dmg += statIncrease;
-      pet.stats.hp += statIncrease * 2;
+      const newStats = {
+        ...pet.stats,
+        dmg: pet.stats.dmg + statIncrease,
+        hp: pet.stats.hp + statIncrease * 2,
+      };
 
       return {
         leveledUp: true,
-        newLevel: pet.level,
-        oldLevel,
+        newLevel,
+        oldLevel: pet.level,
+        expNeeded,
+        newStats,
         statIncrease,
       };
     }
@@ -577,54 +796,34 @@ export const GameController = {
     return { leveledUp: false };
   },
 
-  countPetsByRarity(pets) {
-    const rarities = {};
-    pets.forEach((pet) => {
-      rarities[pet.rarity] = (rarities[pet.rarity] || 0) + 1;
-    });
-    return rarities;
-  },
+  calculateEvolution(pet) {
+    const evolutionStage = (pet.evolutionStage || 1) + 1;
+    const newName = `Mega ${pet.name}`;
 
-  countPetsByType(pets) {
-    const types = {};
-    pets.forEach((pet) => {
-      types[pet.type] = (types[pet.type] || 0) + 1;
-    });
-    return types;
-  },
+    const newStats = {
+      ...pet.stats,
+      dmg: Math.round(pet.stats.dmg * 1.5),
+      hp: Math.round(pet.stats.hp * 1.5),
+    };
 
-  calculateAverageLevel(pets) {
-    if (pets.length === 0) return 0;
-    const total = pets.reduce((sum, pet) => sum + (pet.level || 1), 0);
-    return (total / pets.length).toFixed(1);
+    return {
+      name: newName,
+      evolutionStage,
+      stats: newStats,
+      evolutions: [...(pet.evolutions || []), newName],
+      updatedAt: new Date(),
+    };
   },
 
   async generateOpponentPets(difficulty, userPets) {
     const difficulties = {
-      easy: {
-        levelMultiplier: 0.8,
-        rarityWeights: { common: 60, uncommon: 30, rare: 10 },
-      },
-      medium: {
-        levelMultiplier: 1.0,
-        rarityWeights: { common: 40, uncommon: 40, rare: 15, epic: 5 },
-      },
-      hard: {
-        levelMultiplier: 1.2,
-        rarityWeights: {
-          common: 20,
-          uncommon: 40,
-          rare: 25,
-          epic: 10,
-          legendary: 5,
-        },
-      },
+      easy: { levelMultiplier: 0.8 },
+      medium: { levelMultiplier: 1.0 },
+      hard: { levelMultiplier: 1.2 },
     };
 
     const config = difficulties[difficulty] || difficulties.medium;
     const opponentPets = [];
-
-    // Generate 1-3 opponent pets
     const petCount = Math.floor(Math.random() * 3) + 1;
 
     for (let i = 0; i < petCount; i++) {
@@ -658,7 +857,6 @@ export const GameController = {
       opponentPower += this.calculatePetPower(pet);
     });
 
-    // Add some randomness
     playerPower *= 0.8 + Math.random() * 0.4;
     opponentPower *= 0.8 + Math.random() * 0.4;
 
@@ -676,7 +874,6 @@ export const GameController = {
   },
 
   calculatePetPower(pet) {
-    // Simple power calculation based on stats and level
     const basePower = (pet.stats.dmg + pet.stats.hp) * 0.5;
     const levelBonus = (pet.level || 1) * 10;
     const rarityMultiplier =
@@ -708,18 +905,31 @@ export const GameController = {
         difficulty: "medium",
         description: "Win 5 battles",
       },
-      legendary_hatch: {
-        name: "Legendary Hunter",
-        difficulty: "epic",
-        description: "Hatch a legendary pet",
+      reach_level_10: {
+        name: "Experienced Trainer",
+        difficulty: "medium",
+        description: "Reach level 10",
       },
     };
-
     return quests[questId];
   },
 
+  checkQuestRequirements(user, questId) {
+    switch (questId) {
+      case "beginner_battle":
+        return (user.battlesWon || 0) + (user.battlesLost || 0) > 0;
+      case "hatch_3_pets":
+        return (user.petIds?.length || 0) >= 3;
+      case "win_5_battles":
+        return (user.battlesWon || 0) >= 5;
+      case "reach_level_10":
+        return (user.level || 1) >= 10;
+      default:
+        return false;
+    }
+  },
+
   getNextDailyReward(nextDay) {
-    // Simplified next reward preview
     return {
       coins: Math.floor((50 + nextDay * 2) * (1 + nextDay * 0.1)),
       experience: Math.floor((25 + nextDay * 2) * (1 + nextDay * 0.1)),
@@ -728,11 +938,11 @@ export const GameController = {
   },
 
   formatHatchResult(result) {
-    if (result instanceof Pet) {
+    if (result.type === "Pet") {
       return {
         type: "Pet",
         data: {
-          id: result.id,
+          id: result._id,
           name: result.name,
           type: result.type,
           rarity: result.rarity,
@@ -745,7 +955,7 @@ export const GameController = {
       return {
         type: "Technique",
         data: {
-          id: result.id,
+          id: result._id,
           name: result.name,
           rarity: result.rarity,
           effect: result.effect,
@@ -755,13 +965,12 @@ export const GameController = {
       return {
         type: "Cosmetic",
         data: {
-          id: result.id,
+          id: result._id,
           name: result.name,
           rarity: result.rarity,
         },
       };
     }
-
     return result;
   },
 };

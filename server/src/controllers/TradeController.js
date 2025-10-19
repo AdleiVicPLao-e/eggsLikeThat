@@ -1,29 +1,30 @@
 import Trade from "../models/Trade.js";
-import Pet from "../models/Pet.js";
-import User from "../models/User.js";
+import { Pet } from "../models/Pet.js";
+import { Egg } from "../models/Egg.js";
+import { User } from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import Offer from "../models/Offer.js";
-import { tradeService } from "../services/TradeService.js";
+import { tradeService, marketplaceService } from "../services/TradeService.js";
 import { mailService } from "../services/MailService.js";
 import logger from "../utils/logger.js";
+import mongoose from "mongoose";
 
 export const TradeController = {
-  // List a pet for sale
+  // List a pet for sale (specific function for the route)
   async listPet(req, res) {
     try {
       const { petId, price, currency = "ETH" } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const user = await User.findById(req.user._id);
 
-      // Validate price
-      if (!price || price <= 0) {
+      if (!petId || !price || price <= 0) {
         return res.status(400).json({
           success: false,
-          message: "Invalid price",
+          message: "Missing or invalid required fields",
         });
       }
 
-      // Check if user owns the pet
-      const pet = await Pet.findOne({ _id: petId, owner: user._id });
+      // Check pet ownership
+      const pet = await Pet.findOne({ _id: petId, ownerId: user._id });
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -36,6 +37,7 @@ export const TradeController = {
         pet: petId,
         status: "listed",
       });
+
       if (existingTrade) {
         return res.status(400).json({
           success: false,
@@ -43,7 +45,7 @@ export const TradeController = {
         });
       }
 
-      // Check if there are any pending offers for this pet
+      // Check for pending offers
       const pendingOffers = await Offer.find({
         pet: petId,
         status: "pending",
@@ -77,7 +79,7 @@ export const TradeController = {
       const transaction = new Transaction({
         user: user._id,
         type: "pet_sale",
-        amount: -listingFee, // Negative for fees
+        amount: -listingFee,
         currency,
         itemId: petId,
         itemType: "pet",
@@ -95,10 +97,10 @@ export const TradeController = {
         message: "Pet listed for sale successfully!",
         data: {
           trade: result.trade,
+          blockchain: result.blockchain,
           fees: {
             marketplace: result.trade.marketplaceFee * 100 + "%",
             listingFee: listingFee,
-            estimatedEarnings: result.trade.netAmount,
           },
           user: {
             coins: user.coins,
@@ -117,65 +119,13 @@ export const TradeController = {
     }
   },
 
-  // Cancel a listing
-  async cancelListing(req, res) {
-    try {
-      const { tradeId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh instance
-
-      const result = await tradeService.cancelListing(user._id, tradeId);
-
-      if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          message: result.error,
-        });
-      }
-
-      // Add experience for trade activity
-      const expResult = user.addExperience(10);
-
-      await user.save();
-
-      logger.info(`User ${user.username} cancelled trade ${tradeId}`);
-
-      const responseData = {
-        success: true,
-        message: "Listing cancelled successfully",
-        data: {
-          user: {
-            coins: user.coins,
-            level: user.level,
-            experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
-          },
-        },
-      };
-
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
-      }
-
-      res.json(responseData);
-    } catch (error) {
-      logger.error("Cancel listing error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during listing cancellation",
-      });
-    }
-  },
-
-  // Purchase a listed pet
+  // Purchase a specific pet listing
   async purchasePet(req, res) {
     try {
       const { tradeId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const user = await User.findById(req.user._id);
 
-      const result = await tradeService.purchasePet(user._id, tradeId);
+      const result = await tradeService.purchaseItem(user._id, tradeId);
 
       if (!result.success) {
         return res.status(400).json({
@@ -184,38 +134,51 @@ export const TradeController = {
         });
       }
 
-      // Get seller user instance
-      const seller = await User.findById(result.trade.seller);
+      const trade = await Trade.findById(tradeId)
+        .populate("seller")
+        .populate("pet");
+
+      if (!trade || !trade.pet) {
+        return res.status(404).json({
+          success: false,
+          message: "Trade or pet not found",
+        });
+      }
+
+      const seller = await User.findById(trade.seller._id);
 
       // Create transaction records
       const purchaseTransaction = new Transaction({
         user: user._id,
         type: "pet_purchase",
-        amount: -result.trade.price, // Negative for purchase
-        currency: result.trade.currency,
-        itemId: result.pet._id,
+        amount: -trade.price,
+        currency: trade.currency,
+        itemId: trade.pet._id,
         itemType: "pet",
-        description: `Purchased ${result.pet.name} from ${seller.username}`,
+        description: `Purchased ${trade.pet.name} from ${seller.username}`,
         status: "completed",
       });
 
       const saleTransaction = new Transaction({
         user: seller._id,
         type: "pet_sale",
-        amount: result.trade.netAmount, // Positive for sale (after fees)
-        currency: result.trade.currency,
-        itemId: result.pet._id,
+        amount: trade.netAmount || trade.price * (1 - trade.marketplaceFee),
+        currency: trade.currency,
+        itemId: trade.pet._id,
         itemType: "pet",
-        description: `Sold ${result.pet.name} to ${user.username}`,
+        description: `Sold ${trade.pet.name} to ${user.username}`,
         status: "completed",
       });
 
       await purchaseTransaction.save();
       await saleTransaction.save();
 
-      // Update seller's coins
-      seller.coins += result.trade.netAmount;
-      await seller.save();
+      // Update seller's coins if currency is coins
+      if (trade.currency === "coins") {
+        seller.coins +=
+          trade.netAmount || trade.price * (1 - trade.marketplaceFee);
+        await seller.save();
+      }
 
       // Add experience for both users
       const buyerExpResult = user.addExperience(25);
@@ -227,7 +190,7 @@ export const TradeController = {
       // Send notifications
       if (seller.email && seller.preferences?.notifications) {
         try {
-          await mailService.sendTradeNotification(seller, result.trade, "sold");
+          await mailService.sendTradeNotification(seller, trade, "sold");
         } catch (emailError) {
           logger.warn("Failed to send sale notification email:", emailError);
         }
@@ -235,11 +198,7 @@ export const TradeController = {
 
       if (user.email && user.preferences?.notifications) {
         try {
-          await mailService.sendTradeNotification(
-            user,
-            result.trade,
-            "purchased"
-          );
+          await mailService.sendTradeNotification(user, trade, "purchased");
         } catch (emailError) {
           logger.warn(
             "Failed to send purchase notification email:",
@@ -249,7 +208,7 @@ export const TradeController = {
       }
 
       logger.info(
-        `User ${user.username} purchased pet ${result.pet.name} from ${seller.username}`
+        `User ${user.username} purchased pet ${trade.pet.name} from ${seller.username}`
       );
 
       const responseData = {
@@ -257,25 +216,24 @@ export const TradeController = {
         message: "Pet purchased successfully!",
         data: {
           trade: result.trade,
+          blockchain: result.blockchain,
           pet: {
-            ...result.pet.toObject(),
-            power: this.calculatePetPower(result.pet),
-            totalBattles: result.pet.battlesWon + result.pet.battlesLost,
+            ...trade.pet.toObject(),
+            power: this.calculatePetPower(trade.pet),
+            totalBattles: trade.pet.battlesWon + trade.pet.battlesLost,
             winRate:
-              result.pet.battlesWon + result.pet.battlesLost > 0
+              trade.pet.battlesWon + trade.pet.battlesLost > 0
                 ? (
-                    (result.pet.battlesWon /
-                      (result.pet.battlesWon + result.pet.battlesLost)) *
+                    (trade.pet.battlesWon /
+                      (trade.pet.battlesWon + trade.pet.battlesLost)) *
                     100
                   ).toFixed(1)
                 : 0,
           },
           fees: {
-            marketplace: result.trade.marketplaceFee * 100 + "%",
-            royalty: result.trade.royaltyFee * 100 + "%",
-            total:
-              (result.trade.marketplaceFee + result.trade.royaltyFee) * 100 +
-              "%",
+            marketplace: trade.marketplaceFee * 100 + "%",
+            ...(trade.royaltyFee && { royalty: trade.royaltyFee * 100 + "%" }),
+            total: (trade.marketplaceFee + (trade.royaltyFee || 0)) * 100 + "%",
           },
           user: {
             coins: user.coins,
@@ -302,468 +260,25 @@ export const TradeController = {
     }
   },
 
-  // Get marketplace listings
-  async getListings(req, res) {
+  // Get user's offers
+  async getUserOffers(req, res) {
     try {
-      const {
-        page = 1,
-        limit = 20,
-        tier,
-        type,
-        minPrice,
-        maxPrice,
-        currency = "ETH",
-        sortBy = "newest",
-      } = req.query;
+      const { page = 1, limit = 20, status = "pending" } = req.query;
+      const user = await User.findById(req.user._id);
 
-      const filters = { currency, status: "listed" };
-
-      // Apply filters
-      if (tier) filters["pet.tier"] = tier;
-      if (type) filters["pet.type"] = type;
-      if (minPrice)
-        filters.price = { ...filters.price, $gte: parseFloat(minPrice) };
-      if (maxPrice)
-        filters.price = { ...filters.price, $lte: parseFloat(maxPrice) };
-
-      // Get listings with pagination
-      const trades = await Trade.find(filters)
-        .populate("pet")
-        .populate("seller", "username level")
-        .sort(this.getSortOption(sortBy))
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .lean();
-
-      const total = await Trade.countDocuments(filters);
-
-      // Enhance listings with additional data
-      const enhancedTrades = trades.map((trade) => ({
-        ...trade,
-        timeListed: this.formatTimeListed(trade.listedAt),
-        isOwnListing: trade.seller._id.toString() === req.user?._id?.toString(),
-        petWithStats: {
-          ...trade.pet,
-          power: this.calculatePetPower(trade.pet),
-          totalBattles: trade.pet.battlesWon + trade.pet.battlesLost,
-          winRate:
-            trade.pet.battlesWon + trade.pet.battlesLost > 0
-              ? (
-                  (trade.pet.battlesWon /
-                    (trade.pet.battlesWon + trade.pet.battlesLost)) *
-                  100
-                ).toFixed(1)
-              : 0,
-        },
-        sellerStats: {
-          level: trade.seller.level,
-          totalBattles: trade.seller.totalBattles,
-          winRate: trade.seller.winRate,
-        },
-      }));
-
-      res.json({
-        success: true,
-        data: {
-          listings: enhancedTrades,
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / limit),
-          },
-          filters: {
-            tier,
-            type,
-            minPrice,
-            maxPrice,
-            currency,
-            sortBy,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Get listings error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-
-  // Get user's active listings
-  async getUserListings(req, res) {
-    try {
-      const { page = 1, limit = 20, status = "listed" } = req.query;
-      const user = await User.findById(req.user._id); // Get fresh instance
-
-      const query = { seller: user._id };
+      const query = {
+        $or: [{ fromUser: user._id }, { toUser: user._id }],
+      };
 
       if (status !== "all") {
         query.status = status;
-      }
-
-      const trades = await Trade.find(query)
-        .populate("pet")
-        .populate("buyer", "username level")
-        .sort({ listedAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .lean();
-
-      const total = await Trade.countDocuments(query);
-
-      // Calculate statistics
-      const stats = await this.getUserTradeStats(user._id);
-
-      // Get transaction history for user
-      const recentTransactions = await Transaction.getUserHistory(user._id, 10);
-
-      res.json({
-        success: true,
-        data: {
-          listings: trades,
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / limit),
-          },
-          stats,
-          user: {
-            coins: user.coins,
-            level: user.level,
-            experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
-            recentTransactions,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Get user listings error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-
-  // Get user's trade history
-  async getTradeHistory(req, res) {
-    try {
-      const { page = 1, limit = 20 } = req.query;
-      const user = await User.findById(req.user._id); // Get fresh instance
-
-      // Get trades where user is either seller or buyer
-      const trades = await Trade.find({
-        $or: [{ seller: user._id }, { buyer: user._id }],
-        status: { $in: ["sold", "cancelled"] },
-      })
-        .populate("pet")
-        .populate("seller", "username")
-        .populate("buyer", "username")
-        .sort({ soldAt: -1, cancelledAt: -1, listedAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .lean();
-
-      const total = await Trade.countDocuments({
-        $or: [{ seller: user._id }, { buyer: user._id }],
-        status: { $in: ["sold", "cancelled"] },
-      });
-
-      // Get transaction history
-      const transactions = await Transaction.getUserHistory(user._id, limit);
-
-      res.json({
-        success: true,
-        data: {
-          trades,
-          transactions,
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            pages: Math.ceil(total / limit),
-          },
-          user: {
-            coins: user.coins,
-            level: user.level,
-            experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
-          },
-        },
-      });
-    } catch (error) {
-      logger.error("Get trade history error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-
-  // Get marketplace statistics
-  async getMarketplaceStats(req, res) {
-    try {
-      const user = req.user ? await User.findById(req.user._id) : null;
-
-      const stats = await Trade.aggregate([
-        {
-          $match: {
-            status: "sold",
-            soldAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // Last 24 hours
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalVolume: { $sum: "$price" },
-            averagePrice: { $avg: "$price" },
-            totalSales: { $sum: 1 },
-            uniqueSellers: { $addToSet: "$seller" },
-            uniqueBuyers: { $addToSet: "$buyer" },
-          },
-        },
-      ]);
-
-      const recentListings = await Trade.countDocuments({
-        status: "listed",
-        listedAt: { $gte: new Date(Date.now() - 1 * 60 * 60 * 1000) }, // Last hour
-      });
-
-      const defaultStats = {
-        totalVolume: 0,
-        averagePrice: 0,
-        totalSales: 0,
-        uniqueSellers: 0,
-        uniqueBuyers: 0,
-      };
-
-      const statData = stats[0] || defaultStats;
-
-      // Get user's personal trade stats if logged in
-      let userTradeStats = null;
-      if (user) {
-        userTradeStats = await this.getUserTradeStats(user._id);
-      }
-
-      res.json({
-        success: true,
-        data: {
-          volume24h: {
-            total: statData.totalVolume,
-            average: statData.averagePrice,
-            sales: statData.totalSales,
-          },
-          participants: {
-            sellers: statData.uniqueSellers?.length || 0,
-            buyers: statData.uniqueBuyers?.length || 0,
-            newListings: recentListings,
-          },
-          popularItems: await this.getPopularItems(),
-          userStats: userTradeStats,
-          user: user
-            ? {
-                coins: user.coins,
-                level: user.level,
-                totalBattles: user.totalBattles,
-                winRate: user.winRate,
-              }
-            : null,
-        },
-      });
-    } catch (error) {
-      logger.error("Get marketplace stats error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-
-  // Make an offer on a pet (not listed for sale)
-  async makeOffer(req, res) {
-    try {
-      const {
-        petId,
-        offerPrice,
-        currency = "coins",
-        message,
-        expiresInHours = 48,
-      } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh instance
-
-      // Check if pet exists and is not owned by the user
-      const pet = await Pet.findById(petId).populate("owner");
-      if (!pet) {
-        return res.status(404).json({
-          success: false,
-          message: "Pet not found",
-        });
-      }
-
-      if (pet.owner._id.toString() === user._id.toString()) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot make an offer on your own pet",
-        });
-      }
-
-      // Check if pet is already listed
-      const existingListing = await Trade.findOne({
-        pet: petId,
-        status: "listed",
-      });
-
-      if (existingListing) {
-        return res.status(400).json({
-          success: false,
-          message: "Pet is already listed for sale",
-        });
-      }
-
-      // Check if user has enough coins for the offer (if using coins)
-      if (currency === "coins" && user.coins < offerPrice) {
-        return res.status(400).json({
-          success: false,
-          message: `Not enough coins for this offer. Need: ${offerPrice}, Have: ${user.coins}`,
-        });
-      }
-
-      // Check if there's already a pending offer from this user for this pet
-      const existingOffer = await Offer.findOne({
-        fromUser: user._id,
-        pet: petId,
-        status: "pending",
-        expiresAt: { $gt: new Date() },
-      });
-
-      if (existingOffer) {
-        return res.status(400).json({
-          success: false,
-          message: "You already have a pending offer for this pet",
-        });
-      }
-
-      // Create the offer using Offer model
-      const offer = new Offer({
-        fromUser: user._id,
-        toUser: pet.owner._id,
-        pet: petId,
-        offerPrice,
-        currency,
-        message,
-        expiresAt: new Date(Date.now() + expiresInHours * 60 * 60 * 1000),
-      });
-
-      await offer.save();
-      await offer.populate("fromUser", "username level");
-      await offer.populate("toUser", "username level");
-      await offer.populate("pet");
-
-      // Create pending transaction for the offer (reserved funds)
-      if (currency === "coins") {
-        const transaction = new Transaction({
-          user: user._id,
-          type: "pet_purchase",
-          amount: -offerPrice,
-          currency,
-          itemId: petId,
-          itemType: "pet",
-          description: `Offer for ${pet.name} - Pending`,
-          status: "pending",
-        });
-        await transaction.save();
-      }
-
-      // Add experience for making an offer
-      const expResult = user.addExperience(5);
-      await user.save();
-
-      logger.info(
-        `User ${user.username} made offer of ${offerPrice} ${currency} for pet ${pet.name}`
-      );
-
-      const responseData = {
-        success: true,
-        message: "Offer sent successfully!",
-        data: {
-          offer: {
-            id: offer._id,
-            pet: {
-              id: pet._id,
-              name: pet.name,
-              tier: pet.tier,
-              type: pet.type,
-              level: pet.level,
-            },
-            seller: {
-              id: pet.owner._id,
-              username: pet.owner.username,
-              level: pet.owner.level,
-            },
-            buyer: {
-              id: user._id,
-              username: user.username,
-              level: user.level,
-            },
-            offerPrice,
-            currency,
-            message,
-            status: offer.status,
-            expiresAt: offer.expiresAt,
-            timeUntilExpiration: offer.timeUntilExpiration,
-          },
-          user: {
-            coins: user.coins,
-            level: user.level,
-            experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
-          },
-        },
-      };
-
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
-        responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
-      }
-
-      res.status(201).json(responseData);
-    } catch (error) {
-      logger.error("Make offer error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Internal server error during offer creation",
-      });
-    }
-  },
-
-  // Get user's offers (sent and received)
-  async getUserOffers(req, res) {
-    try {
-      const { type = "all", page = 1, limit = 20 } = req.query;
-      const user = await User.findById(req.user._id); // Get fresh instance
-
-      let query = {};
-
-      if (type === "sent") {
-        query.fromUser = user._id;
-      } else if (type === "received") {
-        query.toUser = user._id;
-      } else {
-        query.$or = [{ fromUser: user._id }, { toUser: user._id }];
       }
 
       const offers = await Offer.find(query)
         .populate("fromUser", "username level")
         .populate("toUser", "username level")
         .populate("pet")
-        .populate("previousOffer")
+        .populate("itemId")
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit))
@@ -771,25 +286,31 @@ export const TradeController = {
 
       const total = await Offer.countDocuments(query);
 
-      // Get offer statistics
-      const offerStats = await Offer.getUserOfferStats(user._id);
+      // Calculate offer statistics
+      const sentStats = await Offer.countDocuments({
+        fromUser: user._id,
+        status: "pending",
+      });
+      const receivedStats = await Offer.countDocuments({
+        toUser: user._id,
+        status: "pending",
+      });
 
       res.json({
         success: true,
         data: {
-          offers: offers.map((offer) => ({
-            ...offer,
-            isSender: offer.fromUser._id.toString() === user._id.toString(),
-            timeUntilExpiration: new Date(offer.expiresAt) - new Date(),
-            isExpired: new Date() > new Date(offer.expiresAt),
-          })),
+          offers,
+          stats: {
+            sent: sentStats,
+            received: receivedStats,
+            total: total,
+          },
           pagination: {
             page: parseInt(page),
             limit: parseInt(limit),
             total,
             pages: Math.ceil(total / limit),
           },
-          stats: offerStats,
           user: {
             coins: user.coins,
             level: user.level,
@@ -812,13 +333,14 @@ export const TradeController = {
   async acceptOffer(req, res) {
     try {
       const { offerId } = req.params;
-      const { responseMessage = "" } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const user = await User.findById(req.user._id);
 
+      // Find the offer
       const offer = await Offer.findById(offerId)
         .populate("fromUser")
         .populate("toUser")
-        .populate("pet");
+        .populate("pet")
+        .populate("itemId");
 
       if (!offer) {
         return res.status(404).json({
@@ -827,109 +349,148 @@ export const TradeController = {
         });
       }
 
-      // Verify user owns the pet
+      // Check if user is the recipient of the offer
       if (offer.toUser._id.toString() !== user._id.toString()) {
         return res.status(403).json({
           success: false,
-          message: "You are not authorized to accept this offer",
+          message: "You can only accept offers sent to you",
         });
       }
 
-      // Check if offer can be accepted
-      if (!offer.canBeActedUpon()) {
+      // Check if offer is still pending
+      if (offer.status !== "pending") {
         return res.status(400).json({
           success: false,
-          message:
-            "This offer cannot be accepted (may be expired or already acted upon)",
+          message: "Offer is no longer pending",
         });
       }
 
-      // Accept the offer
-      offer.acceptOffer(responseMessage);
-      await offer.save();
+      // Check if offer has expired
+      if (offer.expiresAt < new Date()) {
+        return res.status(400).json({
+          success: false,
+          message: "Offer has expired",
+        });
+      }
 
-      // Transfer pet ownership
-      const pet = offer.pet;
-      const originalOwner = user;
-      const buyer = offer.fromUser;
+      let item, itemType, itemName;
 
-      pet.owner = buyer._id;
-      await pet.save();
+      if (offer.pet) {
+        item = offer.pet;
+        itemType = "pet";
+        itemName = item.name;
 
-      // Handle payment
+        // Check if user still owns the pet
+        if (item.ownerId.toString() !== user._id.toString()) {
+          return res.status(400).json({
+            success: false,
+            message: "You no longer own this pet",
+          });
+        }
+      } else if (offer.itemId) {
+        item = offer.itemId;
+        itemType = offer.itemType;
+        itemName = item.name || `${itemType} item`;
+
+        // Check if user still owns the item
+        if (item.ownerId.toString() !== user._id.toString()) {
+          return res.status(400).json({
+            success: false,
+            message: `You no longer own this ${itemType}`,
+          });
+        }
+      }
+
+      // Process the offer acceptance
+      const result = await tradeService.acceptOffer(offerId);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      // Update item ownership
+      if (itemType === "pet") {
+        await Pet.findByIdAndUpdate(item._id, { ownerId: offer.fromUser._id });
+      } else {
+        const Model =
+          itemType === "egg"
+            ? Egg
+            : itemType === "technique"
+            ? mongoose.models.Technique
+            : mongoose.models.Skin;
+        await Model.findByIdAndUpdate(item._id, {
+          ownerId: offer.fromUser._id,
+        });
+      }
+
+      // Handle currency transfer
       if (offer.currency === "coins") {
-        // Transfer coins from buyer to seller (minus fees)
-        const netAmount = offer.netAmount;
+        // Add coins to seller (current user)
+        user.coins += offer.offerPrice;
+        await user.save();
 
-        // Update buyer's coins (deduct offer price)
-        buyer.coins -= offer.offerPrice;
-        await buyer.save();
-
-        // Update seller's coins (add net amount after fees)
-        originalOwner.coins += netAmount;
-        await originalOwner.save();
-
-        // Update pending transaction to completed
-        await Transaction.updateOne(
+        // Update buyer's pending transaction to completed
+        await Transaction.findOneAndUpdate(
           {
-            user: buyer._id,
-            itemId: pet._id,
+            user: offer.fromUser._id,
+            itemId: item._id,
+            itemType,
             status: "pending",
-            type: "pet_purchase",
           },
           {
             status: "completed",
-            description: `Purchased ${pet.name} from ${originalOwner.username} via offer`,
+            description: `Purchased ${itemName} from ${user.username} via offer`,
           }
         );
-
-        // Create sale transaction for seller
-        const saleTransaction = new Transaction({
-          user: originalOwner._id,
-          type: "pet_sale",
-          amount: netAmount,
-          currency: offer.currency,
-          itemId: pet._id,
-          itemType: "pet",
-          description: `Sold ${pet.name} to ${buyer.username} via offer acceptance`,
-          status: "completed",
-        });
-        await saleTransaction.save();
       }
 
-      // Add experience for both users
-      const sellerExpResult = originalOwner.addExperience(20);
-      const buyerExpResult = buyer.addExperience(15);
+      // Create transaction records
+      const saleTransaction = new Transaction({
+        user: user._id,
+        type: `${itemType}_sale`,
+        amount: offer.offerPrice,
+        currency: offer.currency,
+        itemId: item._id,
+        itemType,
+        description: `Sold ${itemName} to ${offer.fromUser.username} via offer`,
+        status: "completed",
+      });
 
-      await originalOwner.save();
-      await buyer.save();
+      await saleTransaction.save();
 
-      // Complete the offer
-      offer.completeOffer();
-      await offer.save();
+      // Add experience
+      const sellerExpResult = user.addExperience(20);
+      const buyerExpResult = offer.fromUser.addExperience(15);
+
+      await user.save();
+      await offer.fromUser.save();
 
       logger.info(
-        `User ${user.username} accepted offer ${offerId} from ${buyer.username}`
+        `User ${user.username} accepted offer for ${itemType} ${itemName} from ${offer.fromUser.username}`
       );
 
       const responseData = {
         success: true,
-        message: "Offer accepted successfully! Pet has been transferred.",
+        message: "Offer accepted successfully!",
         data: {
-          offer: offer.toObject(),
-          pet: {
-            id: pet._id,
-            name: pet.name,
-            newOwner: buyer.username,
+          offer: result.offer,
+          item: {
+            id: item._id,
+            name: itemName,
+            type: itemType,
           },
-          payment: {
-            amount: offer.offerPrice,
-            currency: offer.currency,
-            fees: {
-              marketplace: offer.marketplaceFee * 100 + "%",
-              royalty: offer.royaltyFee * 100 + "%",
-            },
-            netAmount: offer.netAmount,
+          seller: {
+            id: user._id,
+            username: user.username,
+            level: user.level,
+          },
+          buyer: {
+            id: offer.fromUser._id,
+            username: offer.fromUser.username,
+            level: offer.fromUser.level,
           },
           user: {
             coins: user.coins,
@@ -960,12 +521,13 @@ export const TradeController = {
   async rejectOffer(req, res) {
     try {
       const { offerId } = req.params;
-      const { responseMessage = "" } = req.body;
       const user = await User.findById(req.user._id);
 
+      // Find the offer
       const offer = await Offer.findById(offerId)
         .populate("fromUser")
-        .populate("toUser");
+        .populate("pet")
+        .populate("itemId");
 
       if (!offer) {
         return res.status(404).json({
@@ -974,59 +536,78 @@ export const TradeController = {
         });
       }
 
-      // Verify user owns the pet
-      if (offer.toUser._id.toString() !== user._id.toString()) {
+      // Check if user is the recipient of the offer
+      if (offer.toUser.toString() !== user._id.toString()) {
         return res.status(403).json({
           success: false,
-          message: "You are not authorized to reject this offer",
+          message: "You can only reject offers sent to you",
         });
       }
 
-      // Check if offer can be rejected
-      if (!offer.canBeActedUpon()) {
+      // Check if offer is still pending
+      if (offer.status !== "pending") {
         return res.status(400).json({
           success: false,
-          message: "This offer cannot be rejected",
+          message: "Offer is no longer pending",
         });
       }
 
       // Reject the offer
-      offer.rejectOffer(responseMessage);
+      offer.status = "rejected";
+      offer.respondedAt = new Date();
       await offer.save();
 
-      // Refund any reserved funds
+      // Refund coins if currency was coins
       if (offer.currency === "coins") {
-        await Transaction.updateOne(
+        await Transaction.findOneAndUpdate(
           {
             user: offer.fromUser._id,
-            itemId: offer.pet,
+            itemId: offer.pet || offer.itemId,
+            itemType: offer.pet ? "pet" : offer.itemType,
             status: "pending",
-            type: "pet_purchase",
           },
           {
             status: "cancelled",
-            description: `Offer for ${offer.pet.name} was rejected`,
+            description: `Offer rejected for ${
+              offer.pet?.name || offer.itemId
+            }`,
           }
         );
       }
 
+      // Add experience for trade activity
+      const expResult = user.addExperience(5);
+      await user.save();
+
       logger.info(
-        `User ${user.username} rejected offer ${offerId} from ${offer.fromUser.username}`
+        `User ${user.username} rejected offer from ${offer.fromUser.username}`
       );
 
-      res.json({
+      const responseData = {
         success: true,
         message: "Offer rejected successfully",
         data: {
-          offer: offer.toObject(),
+          offer: {
+            id: offer._id,
+            status: offer.status,
+            respondedAt: offer.respondedAt,
+          },
           user: {
             coins: user.coins,
             level: user.level,
+            experience: user.experience,
             totalBattles: user.totalBattles,
             winRate: user.winRate,
           },
         },
-      });
+      };
+
+      if (expResult.leveledUp) {
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = expResult.newLevel;
+      }
+
+      res.json(responseData);
     } catch (error) {
       logger.error("Reject offer error:", error);
       res.status(500).json({
@@ -1036,17 +617,26 @@ export const TradeController = {
     }
   },
 
-  // Make a counter offer
+  // Counter an offer
   async counterOffer(req, res) {
     try {
       const { offerId } = req.params;
-      const { counterPrice, message = "", expiresInHours = 24 } = req.body;
+      const { counterPrice, message } = req.body;
       const user = await User.findById(req.user._id);
 
+      if (!counterPrice || counterPrice <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid counter offer price",
+        });
+      }
+
+      // Find the original offer
       const originalOffer = await Offer.findById(offerId)
         .populate("fromUser")
         .populate("toUser")
-        .populate("pet");
+        .populate("pet")
+        .populate("itemId");
 
       if (!originalOffer) {
         return res.status(404).json({
@@ -1055,84 +645,96 @@ export const TradeController = {
         });
       }
 
-      // Verify user owns the pet
+      // Check if user is the recipient of the offer
       if (originalOffer.toUser._id.toString() !== user._id.toString()) {
         return res.status(403).json({
           success: false,
-          message: "You are not authorized to counter this offer",
+          message: "You can only counter offers sent to you",
         });
       }
 
-      // Check if original offer can be countered
-      if (!originalOffer.canBeActedUpon()) {
+      // Check if offer is still pending
+      if (originalOffer.status !== "pending") {
         return res.status(400).json({
           success: false,
-          message: "This offer cannot be countered",
+          message: "Offer is no longer pending",
         });
       }
 
-      // Create counter offer
-      const counterOfferData = originalOffer.createCounterOffer(
-        counterPrice,
-        message
-      );
-      const counterOffer = new Offer({
-        ...counterOfferData,
-        expiresAt: new Date(Date.now() + expiresInHours * 60 * 60 * 1000),
-      });
-
       await counterOffer.save();
-      await counterOffer.populate("fromUser", "username level");
-      await counterOffer.populate("toUser", "username level");
-      await counterOffer.populate("pet");
 
-      // Update original offer status
-      originalOffer.status = "countered";
+      // Update original offer to show it has a counter
+      originalOffer.hasCounterOffer = true;
       await originalOffer.save();
 
-      // Add counter offer to original offer's history
-      originalOffer.counterOffers.push({
-        offer: counterOffer._id,
-        createdAt: new Date(),
-      });
-      await originalOffer.save();
+      // Add experience for trade activity
+      const expResult = user.addExperience(8);
+      await user.save();
 
       logger.info(
-        `User ${user.username} countered offer ${offerId} with ${counterPrice} ${counterOffer.currency}`
+        `User ${user.username} made counter offer of ${counterPrice} ${originalOffer.currency} to ${originalOffer.fromUser.username}`
       );
 
-      res.status(201).json({
+      const responseData = {
         success: true,
         message: "Counter offer sent successfully!",
         data: {
-          counterOffer: counterOffer.toObject(),
-          originalOffer: originalOffer.toObject(),
+          counterOffer: {
+            id: counterOffer._id,
+            item: {
+              id: originalOffer.pet?._id || originalOffer.itemId?._id,
+              name: originalOffer.pet?.name || `${originalOffer.itemType} item`,
+              type: originalOffer.pet ? "pet" : originalOffer.itemType,
+            },
+            seller: {
+              id: user._id,
+              username: user.username,
+              level: user.level,
+            },
+            buyer: {
+              id: originalOffer.fromUser._id,
+              username: originalOffer.fromUser.username,
+              level: originalOffer.fromUser.level,
+            },
+            offerPrice: counterPrice,
+            currency: originalOffer.currency,
+            message: counterOffer.message,
+            status: counterOffer.status,
+            expiresAt: counterOffer.expiresAt,
+          },
           user: {
             coins: user.coins,
             level: user.level,
+            experience: user.experience,
             totalBattles: user.totalBattles,
             winRate: user.winRate,
           },
         },
-      });
+      };
+
+      if (expResult.leveledUp) {
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = expResult.newLevel;
+      }
+
+      res.status(201).json(responseData);
     } catch (error) {
       logger.error("Counter offer error:", error);
       res.status(500).json({
         success: false,
-        message: "Internal server error during counter offer creation",
+        message: "Internal server error during counter offer",
       });
     }
   },
 
-  // Cancel an offer (by the sender)
+  // Cancel an offer
   async cancelOffer(req, res) {
     try {
       const { offerId } = req.params;
       const user = await User.findById(req.user._id);
 
-      const offer = await Offer.findById(offerId)
-        .populate("fromUser")
-        .populate("toUser");
+      // Find the offer
+      const offer = await Offer.findById(offerId);
 
       if (!offer) {
         return res.status(404).json({
@@ -1141,58 +743,76 @@ export const TradeController = {
         });
       }
 
-      // Verify user is the sender
-      if (offer.fromUser._id.toString() !== user._id.toString()) {
+      // Check if user is the sender of the offer
+      if (offer.fromUser.toString() !== user._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "You can only cancel your own offers",
         });
       }
 
-      // Check if offer can be cancelled
-      if (!offer.canBeActedUpon()) {
+      // Check if offer is still pending
+      if (offer.status !== "pending") {
         return res.status(400).json({
           success: false,
-          message: "This offer cannot be cancelled",
+          message: "Offer is no longer pending",
         });
       }
 
       // Cancel the offer
       offer.status = "cancelled";
-      offer.respondedAt = new Date();
+      offer.cancelledAt = new Date();
       await offer.save();
 
-      // Refund any reserved funds
+      // Refund coins if currency was coins
       if (offer.currency === "coins") {
-        await Transaction.updateOne(
+        await Transaction.findOneAndUpdate(
           {
             user: user._id,
-            itemId: offer.pet,
+            itemId: offer.pet || offer.itemId,
+            itemType: offer.pet ? "pet" : offer.itemType,
             status: "pending",
-            type: "pet_purchase",
           },
           {
             status: "cancelled",
-            description: `Offer for ${offer.pet.name} was cancelled`,
+            description: `Offer cancelled for ${
+              offer.pet?.name || offer.itemId
+            }`,
           }
         );
       }
 
+      // Add experience for trade activity
+      const expResult = user.addExperience(3);
+      await user.save();
+
       logger.info(`User ${user.username} cancelled offer ${offerId}`);
 
-      res.json({
+      const responseData = {
         success: true,
         message: "Offer cancelled successfully",
         data: {
-          offer: offer.toObject(),
+          offer: {
+            id: offer._id,
+            status: offer.status,
+            cancelledAt: offer.cancelledAt,
+          },
           user: {
             coins: user.coins,
             level: user.level,
+            experience: user.experience,
             totalBattles: user.totalBattles,
             winRate: user.winRate,
           },
         },
-      });
+      };
+
+      if (expResult.leveledUp) {
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = expResult.newLevel;
+      }
+
+      res.json(responseData);
     } catch (error) {
       logger.error("Cancel offer error:", error);
       res.status(500).json({
@@ -1202,35 +822,164 @@ export const TradeController = {
     }
   },
 
-  // Get negotiation history for an offer
-  async getNegotiationHistory(req, res) {
+  // List an item for sale (pet, egg, technique, skin)
+  async listItem(req, res) {
     try {
-      const { offerId } = req.params;
+      const { itemId, itemType, price, currency = "ETH" } = req.body;
       const user = await User.findById(req.user._id);
 
-      const negotiationHistory = await Offer.findNegotiationHistory(offerId);
-
-      // Verify user is part of this negotiation
-      const userInvolved = negotiationHistory.some(
-        (offer) =>
-          offer.fromUser._id.toString() === user._id.toString() ||
-          offer.toUser._id.toString() === user._id.toString()
-      );
-
-      if (!userInvolved) {
-        return res.status(403).json({
+      // Validate input
+      if (!itemId || !itemType || !price || price <= 0) {
+        return res.status(400).json({
           success: false,
-          message: "You are not authorized to view this negotiation history",
+          message: "Missing or invalid required fields",
         });
       }
 
-      res.json({
+      // Validate item type
+      const validItemTypes = ["pet", "egg", "technique", "skin"];
+      if (!validItemTypes.includes(itemType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid item type. Must be pet, egg, technique, or skin",
+        });
+      }
+
+      let item;
+      let itemName;
+
+      // Check item ownership based on type
+      switch (itemType) {
+        case "pet":
+          item = await Pet.findOne({ _id: itemId, ownerId: user._id });
+          itemName = item?.name;
+          break;
+        case "egg":
+          item = await Egg.findOne({ _id: itemId, ownerId: user._id });
+          itemName = "Egg";
+          break;
+        case "technique":
+          const Technique = mongoose.models.Technique;
+          item = await Technique.findOne({ _id: itemId, ownerId: user._id });
+          itemName = item?.name;
+          break;
+        case "skin":
+          const Skin = mongoose.models.Skin;
+          item = await Skin.findOne({ _id: itemId, ownerId: user._id });
+          itemName = item?.name;
+          break;
+      }
+
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: `${itemType} not found or not owned by you`,
+        });
+      }
+
+      // Check if item is already listed
+      const existingTrade = await Trade.findOne({
+        $or: [
+          { pet: itemId, status: "listed" },
+          { itemId: itemId, itemType, status: "listed" },
+        ],
+      });
+
+      if (existingTrade) {
+        return res.status(400).json({
+          success: false,
+          message: `${itemType} is already listed for sale`,
+        });
+      }
+
+      // Check for pending offers
+      const pendingOffers = await Offer.find({
+        pet: itemType === "pet" ? itemId : null,
+        itemId: itemType !== "pet" ? itemId : null,
+        itemType: itemType !== "pet" ? itemType : null,
+        status: "pending",
+        expiresAt: { $gt: new Date() },
+      });
+
+      if (pendingOffers.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot list ${itemType} while there are pending offers`,
+        });
+      }
+
+      // Use trade service to list item
+      let result;
+      switch (itemType) {
+        case "pet":
+          result = await tradeService.listPet(
+            user._id,
+            itemId,
+            price,
+            currency
+          );
+          break;
+        case "egg":
+          result = await tradeService.listEgg(
+            user._id,
+            itemId,
+            price,
+            currency
+          );
+          break;
+        case "technique":
+          result = await tradeService.listTechnique(
+            user._id,
+            itemId,
+            price,
+            currency
+          );
+          break;
+        case "skin":
+          result = await tradeService.listSkin(
+            user._id,
+            itemId,
+            price,
+            currency
+          );
+          break;
+      }
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      // Create transaction record for listing fee
+      const listingFee = price * result.trade.marketplaceFee;
+      const transaction = new Transaction({
+        user: user._id,
+        type: `${itemType}_sale`,
+        amount: -listingFee,
+        currency,
+        itemId: itemId,
+        itemType,
+        description: `Listing fee for ${itemName}`,
+        status: "completed",
+      });
+      await transaction.save();
+
+      logger.info(
+        `User ${user.username} listed ${itemType} ${itemName} for ${price} ${currency}`
+      );
+
+      res.status(201).json({
         success: true,
+        message: `${itemType} listed for sale successfully!`,
         data: {
-          negotiationHistory: negotiationHistory.map((offer) => ({
-            ...offer.toObject(),
-            isSender: offer.fromUser._id.toString() === user._id.toString(),
-          })),
+          trade: result.trade,
+          blockchain: result.blockchain,
+          fees: {
+            marketplace: result.trade.marketplaceFee * 100 + "%",
+            listingFee: listingFee,
+          },
           user: {
             coins: user.coins,
             level: user.level,
@@ -1240,18 +989,840 @@ export const TradeController = {
         },
       });
     } catch (error) {
-      logger.error("Get negotiation history error:", error);
+      logger.error("List item error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during item listing",
+      });
+    }
+  },
+
+  // Cancel a listing
+  async cancelListing(req, res) {
+    try {
+      const { tradeId } = req.params;
+      const user = await User.findById(req.user._id);
+
+      const result = await tradeService.cancelListing(user._id, tradeId);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      // Add experience for trade activity
+      const expResult = user.addExperience(10);
+      await user.save();
+
+      logger.info(`User ${user.username} cancelled trade ${tradeId}`);
+
+      const responseData = {
+        success: true,
+        message: "Listing cancelled successfully",
+        data: {
+          blockchain: result.blockchain,
+          user: {
+            coins: user.coins,
+            level: user.level,
+            experience: user.experience,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      };
+
+      if (expResult.leveledUp) {
+        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = expResult.newLevel;
+      }
+
+      res.json(responseData);
+    } catch (error) {
+      logger.error("Cancel listing error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during listing cancellation",
+      });
+    }
+  },
+
+  // Purchase a listed item
+  async purchaseItem(req, res) {
+    try {
+      const { tradeId } = req.params;
+      const user = await User.findById(req.user._id);
+
+      const result = await tradeService.purchaseItem(user._id, tradeId);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      const trade = await Trade.findById(tradeId)
+        .populate("seller")
+        .populate("pet")
+        .populate("itemId");
+
+      // Get item details based on type
+      let item, itemName, itemType;
+      if (trade.itemType === "pet") {
+        item = trade.pet;
+        itemName = item.name;
+        itemType = "pet";
+      } else {
+        item = trade.itemId;
+        itemName = item.name || `${trade.itemType} item`;
+        itemType = trade.itemType;
+      }
+
+      const seller = await User.findById(trade.seller._id);
+
+      // Create transaction records
+      const purchaseTransaction = new Transaction({
+        user: user._id,
+        type: `${itemType}_purchase`,
+        amount: -trade.price,
+        currency: trade.currency,
+        itemId: item._id,
+        itemType,
+        description: `Purchased ${itemName} from ${seller.username}`,
+        status: "completed",
+      });
+
+      const saleTransaction = new Transaction({
+        user: seller._id,
+        type: `${itemType}_sale`,
+        amount: trade.netAmount || trade.price * (1 - trade.marketplaceFee),
+        currency: trade.currency,
+        itemId: item._id,
+        itemType,
+        description: `Sold ${itemName} to ${user.username}`,
+        status: "completed",
+      });
+
+      await purchaseTransaction.save();
+      await saleTransaction.save();
+
+      // Update seller's coins if currency is coins
+      if (trade.currency === "coins") {
+        seller.coins +=
+          trade.netAmount || trade.price * (1 - trade.marketplaceFee);
+        await seller.save();
+      }
+
+      // Add experience for both users
+      const buyerExpResult = user.addExperience(25);
+      const sellerExpResult = seller.addExperience(15);
+
+      await user.save();
+      await seller.save();
+
+      // Send notifications
+      if (seller.email && seller.preferences?.notifications) {
+        try {
+          await mailService.sendTradeNotification(seller, trade, "sold");
+        } catch (emailError) {
+          logger.warn("Failed to send sale notification email:", emailError);
+        }
+      }
+
+      if (user.email && user.preferences?.notifications) {
+        try {
+          await mailService.sendTradeNotification(user, trade, "purchased");
+        } catch (emailError) {
+          logger.warn(
+            "Failed to send purchase notification email:",
+            emailError
+          );
+        }
+      }
+
+      logger.info(
+        `User ${user.username} purchased ${itemType} ${itemName} from ${seller.username}`
+      );
+
+      const responseData = {
+        success: true,
+        message: `${itemType} purchased successfully!`,
+        data: {
+          trade: result.trade,
+          blockchain: result.blockchain,
+          item: {
+            ...item.toObject(),
+            type: itemType,
+            ...(itemType === "pet"
+              ? {
+                  power: this.calculatePetPower(item),
+                  totalBattles: item.battlesWon + item.battlesLost,
+                  winRate:
+                    item.battlesWon + item.battlesLost > 0
+                      ? (
+                          (item.battlesWon /
+                            (item.battlesWon + item.battlesLost)) *
+                          100
+                        ).toFixed(1)
+                      : 0,
+                }
+              : {}),
+          },
+          fees: {
+            marketplace: trade.marketplaceFee * 100 + "%",
+            ...(trade.royaltyFee && { royalty: trade.royaltyFee * 100 + "%" }),
+            total: (trade.marketplaceFee + (trade.royaltyFee || 0)) * 100 + "%",
+          },
+          user: {
+            coins: user.coins,
+            level: user.level,
+            experience: user.experience,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      };
+
+      if (buyerExpResult.leveledUp) {
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = buyerExpResult.newLevel;
+      }
+
+      res.json(responseData);
+    } catch (error) {
+      logger.error("Purchase item error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during item purchase",
+      });
+    }
+  },
+
+  // Get marketplace listings with blockchain integration
+  async getListings(req, res) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        itemType,
+        minPrice,
+        maxPrice,
+        currency = "ETH",
+        sortBy = "newest",
+        includeBlockchain = "true",
+      } = req.query;
+
+      const filters = { currency, status: "listed" };
+
+      // Apply filters
+      if (itemType) filters.itemType = itemType;
+      if (minPrice)
+        filters.price = { ...filters.price, $gte: parseFloat(minPrice) };
+      if (maxPrice)
+        filters.price = { ...filters.price, $lte: parseFloat(maxPrice) };
+
+      // Get listings with pagination
+      const result = await tradeService.getListings(
+        filters,
+        parseInt(page),
+        parseInt(limit)
+      );
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      // Enhance listings with additional data
+      const enhancedTrades = await Promise.all(
+        result.trades.map(async (trade) => {
+          let item, itemDetails;
+
+          if (trade.itemType === "pet") {
+            item = await Pet.findById(trade.pet).lean();
+            itemDetails = item
+              ? {
+                  ...item,
+                  power: this.calculatePetPower(item),
+                  totalBattles: item.battlesWon + item.battlesLost,
+                  winRate:
+                    item.battlesWon + item.battlesLost > 0
+                      ? (
+                          (item.battlesWon /
+                            (item.battlesWon + item.battlesLost)) *
+                          100
+                        ).toFixed(1)
+                      : 0,
+                }
+              : null;
+          } else {
+            const model =
+              trade.itemType === "egg"
+                ? Egg
+                : trade.itemType === "technique"
+                ? mongoose.models.Technique
+                : mongoose.models.Skin;
+            item = await model.findById(trade.itemId).lean();
+            itemDetails = item;
+          }
+
+          return {
+            ...trade,
+            item: itemDetails,
+            timeListed: this.formatTimeListed(trade.listedAt),
+            isOwnListing:
+              trade.seller._id.toString() === req.user?._id?.toString(),
+            sellerStats: {
+              level: trade.seller.level,
+              totalBattles: trade.seller.totalBattles,
+              winRate: trade.seller.winRate,
+            },
+          };
+        })
+      );
+
+      // Get blockchain listings if requested
+      let blockchainListings = [];
+      if (includeBlockchain === "true") {
+        const blockchainResult = await tradeService.getBlockchainListings();
+        if (blockchainResult.success) {
+          blockchainListings = blockchainResult.listings;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          listings: enhancedTrades,
+          blockchainListings,
+          pagination: result.pagination,
+          filters: {
+            itemType,
+            minPrice,
+            maxPrice,
+            currency,
+            sortBy,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get listings error:", error);
       res.status(500).json({
         success: false,
         message: "Internal server error",
       });
     }
   },
+
+  // Get user's active listings
+  async getUserListings(req, res) {
+    try {
+      const { page = 1, limit = 20, status = "listed" } = req.query;
+      const user = await User.findById(req.user._id);
+
+      const query = { seller: user._id };
+      if (status !== "all") {
+        query.status = status;
+      }
+
+      const trades = await Trade.find(query)
+        .populate("pet")
+        .populate("itemId")
+        .populate("buyer", "username level")
+        .sort({ listedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+        .lean();
+
+      const total = await Trade.countDocuments(query);
+
+      // Calculate statistics
+      const stats = await this.getUserTradeStats(user._id);
+
+      // Get user's NFTs from blockchain
+      const nftsResult = await tradeService.getUserNFTs(user._id);
+      const userNFTs = nftsResult.success ? nftsResult.nfts : [];
+
+      res.json({
+        success: true,
+        data: {
+          listings: trades,
+          userNFTs,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / limit),
+          },
+          stats,
+          user: {
+            coins: user.coins,
+            level: user.level,
+            experience: user.experience,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get user listings error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get user's trade history
+  async getTradeHistory(req, res) {
+    try {
+      const { page = 1, limit = 20 } = req.query;
+      const user = await User.findById(req.user._id);
+
+      const result = await tradeService.getUserTradeHistory(
+        user._id,
+        parseInt(page),
+        parseInt(limit)
+      );
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      // Get transaction history
+      const transactions = await Transaction.getUserHistory(user._id, limit);
+
+      res.json({
+        success: true,
+        data: {
+          trades: result.trades,
+          transactions,
+          pagination: result.pagination,
+          user: {
+            coins: user.coins,
+            level: user.level,
+            experience: user.experience,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get trade history error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get marketplace statistics with blockchain data
+  async getMarketplaceStats(req, res) {
+    try {
+      const user = req.user ? await User.findById(req.user._id) : null;
+
+      // Get marketplace stats from service
+      const statsResult = await marketplaceService.getMarketplaceStats();
+
+      if (!statsResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: statsResult.error,
+        });
+      }
+
+      const stats = statsResult.stats;
+
+      // Get additional stats from database
+      const recentStats = await Trade.aggregate([
+        {
+          $match: {
+            status: "sold",
+            soldAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalVolume: { $sum: "$price" },
+            averagePrice: { $avg: "$price" },
+            totalSales: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const recentListings = await Trade.countDocuments({
+        status: "listed",
+        listedAt: { $gte: new Date(Date.now() - 1 * 60 * 60 * 1000) },
+      });
+
+      const recentStatsData = recentStats[0] || {
+        totalVolume: 0,
+        averagePrice: 0,
+        totalSales: 0,
+      };
+
+      // Get user's personal trade stats if logged in
+      let userTradeStats = null;
+      if (user) {
+        userTradeStats = await this.getUserTradeStats(user._id);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          marketplace: stats,
+          volume24h: {
+            total: recentStatsData.totalVolume,
+            average: recentStatsData.averagePrice,
+            sales: recentStatsData.totalSales,
+          },
+          activity: {
+            newListings: recentListings,
+            activeTraders: stats.activeUsers,
+          },
+          popularItems: await this.getPopularItems(),
+          userStats: userTradeStats,
+          user: user
+            ? {
+                coins: user.coins,
+                level: user.level,
+                totalBattles: user.totalBattles,
+                winRate: user.winRate,
+              }
+            : null,
+        },
+      });
+    } catch (error) {
+      logger.error("Get marketplace stats error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Sync blockchain listings
+  async syncBlockchainListings(req, res) {
+    try {
+      const result = await tradeService.syncBlockchainListings();
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully synced ${result.synced} listings with blockchain`,
+        data: {
+          synced: result.synced,
+        },
+      });
+    } catch (error) {
+      logger.error("Sync blockchain listings error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during blockchain sync",
+      });
+    }
+  },
+
+  // Get user's NFTs from blockchain
+  async getUserNFTs(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+
+      const result = await tradeService.getUserNFTs(user._id);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          nfts: result.nfts,
+          user: {
+            walletAddress: user.walletAddress,
+            coins: user.coins,
+            level: user.level,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get user NFTs error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Verify NFT ownership
+  async verifyOwnership(req, res) {
+    try {
+      const { tokenId, nftContract } = req.params;
+      const user = await User.findById(req.user._id);
+
+      const isOwner = await marketplaceService.verifyOwnership(
+        user._id,
+        tokenId,
+        nftContract
+      );
+
+      res.json({
+        success: true,
+        data: {
+          isOwner,
+          tokenId,
+          nftContract,
+          user: {
+            walletAddress: user.walletAddress,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Verify ownership error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Make an offer on an item (not listed for sale)
+  async makeOffer(req, res) {
+    try {
+      const {
+        itemId,
+        itemType,
+        offerPrice,
+        currency = "coins",
+        message,
+        expiresInHours = 48,
+      } = req.body;
+      const user = await User.findById(req.user._id);
+
+      // Validate item type
+      const validItemTypes = ["pet", "egg", "technique", "skin"];
+      if (!validItemTypes.includes(itemType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid item type",
+        });
+      }
+
+      // Check if item exists and is not owned by the user
+      let item, owner;
+      switch (itemType) {
+        case "pet":
+          item = await Pet.findById(itemId).populate("ownerId");
+          owner = item?.ownerId;
+          break;
+        case "egg":
+          item = await Egg.findById(itemId).populate("ownerId");
+          owner = item?.ownerId;
+          break;
+        case "technique":
+          const Technique = mongoose.models.Technique;
+          item = await Technique.findById(itemId).populate("ownerId");
+          owner = item?.ownerId;
+          break;
+        case "skin":
+          const Skin = mongoose.models.Skin;
+          item = await Skin.findById(itemId).populate("ownerId");
+          owner = item?.ownerId;
+          break;
+      }
+
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: `${itemType} not found`,
+        });
+      }
+
+      if (owner._id.toString() === user._id.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot make an offer on your own ${itemType}`,
+        });
+      }
+
+      // Check if item is already listed
+      const existingListing = await Trade.findOne({
+        $or: [
+          { pet: itemType === "pet" ? itemId : null, status: "listed" },
+          {
+            itemId: itemType !== "pet" ? itemId : null,
+            itemType,
+            status: "listed",
+          },
+        ],
+      });
+
+      if (existingListing) {
+        return res.status(400).json({
+          success: false,
+          message: `${itemType} is already listed for sale`,
+        });
+      }
+
+      // Check if user has enough coins for the offer (if using coins)
+      if (currency === "coins" && user.coins < offerPrice) {
+        return res.status(400).json({
+          success: false,
+          message: `Not enough coins for this offer. Need: ${offerPrice}, Have: ${user.coins}`,
+        });
+      }
+
+      // Check if there's already a pending offer from this user for this item
+      const existingOffer = await Offer.findOne({
+        fromUser: user._id,
+        $or: [
+          { pet: itemType === "pet" ? itemId : null },
+          { itemId: itemType !== "pet" ? itemId : null, itemType },
+        ],
+        status: "pending",
+        expiresAt: { $gt: new Date() },
+      });
+
+      if (existingOffer) {
+        return res.status(400).json({
+          success: false,
+          message: "You already have a pending offer for this item",
+        });
+      }
+
+      // Create the offer
+      const offer = new Offer({
+        fromUser: user._id,
+        toUser: owner._id,
+        pet: itemType === "pet" ? itemId : null,
+        itemId: itemType !== "pet" ? itemId : null,
+        itemType: itemType !== "pet" ? itemType : null,
+        offerPrice,
+        currency,
+        message,
+        expiresAt: new Date(Date.now() + expiresInHours * 60 * 60 * 1000),
+      });
+
+      await offer.save();
+      await offer.populate("fromUser", "username level");
+      await offer.populate("toUser", "username level");
+      if (itemType === "pet") {
+        await offer.populate("pet");
+      } else {
+        await offer.populate("itemId");
+      }
+
+      // Create pending transaction for the offer (reserved funds)
+      if (currency === "coins") {
+        const transaction = new Transaction({
+          user: user._id,
+          type: `${itemType}_purchase`,
+          amount: -offerPrice,
+          currency,
+          itemId: itemId,
+          itemType,
+          description: `Offer for ${item.name || itemType} - Pending`,
+          status: "pending",
+        });
+        await transaction.save();
+      }
+
+      // Add experience for making an offer
+      const expResult = user.addExperience(5);
+      await user.save();
+
+      logger.info(
+        `User ${
+          user.username
+        } made offer of ${offerPrice} ${currency} for ${itemType} ${
+          item.name || itemId
+        }`
+      );
+
+      const responseData = {
+        success: true,
+        message: "Offer sent successfully!",
+        data: {
+          offer: {
+            id: offer._id,
+            item: {
+              id: item._id,
+              name: item.name || `${itemType} item`,
+              type: itemType,
+              ...(itemType === "pet"
+                ? {
+                    tier: item.tier,
+                    level: item.level,
+                  }
+                : {}),
+            },
+            seller: {
+              id: owner._id,
+              username: owner.username,
+              level: owner.level,
+            },
+            buyer: {
+              id: user._id,
+              username: user.username,
+              level: user.level,
+            },
+            offerPrice,
+            currency,
+            message,
+            status: offer.status,
+            expiresAt: offer.expiresAt,
+          },
+          user: {
+            coins: user.coins,
+            level: user.level,
+            experience: user.experience,
+            totalBattles: user.totalBattles,
+            winRate: user.winRate,
+          },
+        },
+      };
+
+      if (expResult.leveledUp) {
+        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+        responseData.data.user.leveledUp = true;
+        responseData.data.user.newLevel = expResult.newLevel;
+      }
+
+      res.status(201).json(responseData);
+    } catch (error) {
+      logger.error("Make offer error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during offer creation",
+      });
+    }
+  },
+
   // Get user's transaction history
   async getTransactionHistory(req, res) {
     try {
       const { page = 1, limit = 20, type, currency } = req.query;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const user = await User.findById(req.user._id);
 
       const query = { user: user._id };
       if (type) query.type = type;
@@ -1307,7 +1878,7 @@ export const TradeController = {
     }
   },
 
-  // Helper methods
+  // Helper methods (keep all existing helper methods)
   getSortOption(sortBy) {
     const sortOptions = {
       newest: { listedAt: -1 },

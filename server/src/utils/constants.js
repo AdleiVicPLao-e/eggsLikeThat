@@ -91,7 +91,7 @@ export const TECHNIQUES = [
 ];
 
 // 🌋 Pet elemental types and abilities
-export const TYPES = typesData;
+export const PET_TYPES = typesData;
 export const TYPE_KEYS = Object.keys(typesData);
 
 // Flatten ability sets into one lookup

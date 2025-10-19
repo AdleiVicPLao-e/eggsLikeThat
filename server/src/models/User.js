@@ -2,31 +2,42 @@
 import { Wallet } from "ethers";
 import { Pet } from "./Pet.js";
 import { Egg } from "./Egg.js";
+import bcrypt from "bcryptjs";
 
 export class User {
   constructor({
     id = crypto.randomUUID(),
     username,
     email,
-    passwordHash, // In real app, use proper hashing like bcrypt
+    passwordHash,
     walletAddress = null,
-    privateKey = null, // In production, never store plain private keys!
+    privateKey = null,
 
     // Inventory
     pets = [],
     eggs = [],
     techniques = [],
     skins = [],
-    balance = 0, // In-game currency
-
-    // Blockchain assets
-    nftTokens = [], // Track NFT token IDs owned
-    transactions = [], // Transaction history
+    balance = 0,
+    freeRolls = 0,
 
     // Game progression
     level = 1,
     experience = 0,
     rank = "Beginner",
+    battlesWon = 0,
+    battlesLost = 0,
+    completedQuests = [],
+    consecutiveDays = 1,
+    lastDailyClaim = null,
+    lastFreeHatch = null,
+
+    // Authentication
+    isGuest = false,
+
+    // Blockchain assets
+    nftTokens = [],
+    transactions = [],
 
     // Metadata
     createdAt = new Date(),
@@ -40,7 +51,7 @@ export class User {
 
     // Blockchain identity
     this.walletAddress = walletAddress;
-    this.privateKey = privateKey; // ⚠️ Remove in production!
+    this.privateKey = privateKey;
 
     // Game assets
     this.pets = pets.map((pet) => (pet instanceof Pet ? pet : new Pet(pet)));
@@ -50,15 +61,25 @@ export class User {
     this.techniques = techniques;
     this.skins = skins;
     this.balance = balance;
+    this.freeRolls = freeRolls;
+
+    // Game progression
+    this.level = level;
+    this.experience = experience;
+    this.rank = rank;
+    this.battlesWon = battlesWon;
+    this.battlesLost = battlesLost;
+    this.completedQuests = completedQuests;
+    this.consecutiveDays = consecutiveDays;
+    this.lastDailyClaim = lastDailyClaim;
+    this.lastFreeHatch = lastFreeHatch;
+
+    // Authentication
+    this.isGuest = isGuest;
 
     // Blockchain tracking
     this.nftTokens = nftTokens;
     this.transactions = transactions;
-
-    // Progression
-    this.level = level;
-    this.experience = experience;
-    this.rank = rank;
 
     // Timestamps
     this.createdAt = createdAt;
@@ -69,25 +90,142 @@ export class User {
   /** --- 🔐 User Management --- **/
 
   static async createWithWallet(username, email, password) {
-    // Generate new blockchain wallet
     const wallet = Wallet.createRandom();
+    const passwordHash = await this.hashPassword(password);
 
     return new User({
       username,
       email,
-      passwordHash: await this.hashPassword(password), // Implement proper hashing
+      passwordHash,
       walletAddress: wallet.address,
-      privateKey: wallet.privateKey, // ⚠️ Only for demo - use secure key management
+      privateKey: wallet.privateKey,
+      balance: 1000,
+      freeRolls: 3,
     });
   }
 
-  static hashPassword(password) {
-    // Implement proper password hashing (bcrypt, etc.)
-    return Promise.resolve(`hashed_${password}`); // Placeholder
+  static async hashPassword(password) {
+    const saltRounds = 12;
+    return await bcrypt.hash(password, saltRounds);
   }
 
-  verifyPassword(password) {
-    return this.passwordHash === `hashed_${password}`; // Placeholder
+  async verifyPassword(password) {
+    return await bcrypt.compare(password, this.passwordHash);
+  }
+
+  // Static method to find user by wallet address
+  static async findByWallet(walletAddress) {
+    // This would typically query your database
+    // For now, we'll return a mock implementation
+    // You'll need to implement the actual database query
+    return null; // Replace with actual database lookup
+  }
+
+  // Static method to find user by email
+  static async findByEmail(email) {
+    // This would typically query your database
+    // For now, we'll return a mock implementation
+    // You'll need to implement the actual database query
+    return null; // Replace with actual database lookup
+  }
+
+  // Static method to find user by username
+  static async findByUsername(username) {
+    // This would typically query your database
+    // For now, we'll return a mock implementation
+    // You'll need to implement the actual database query
+    return null; // Replace with actual database lookup
+  }
+
+  // Save user to database
+  async save() {
+    // This would typically save to your database
+    // For now, we'll update the updatedAt timestamp
+    this.updatedAt = new Date();
+    // Implement your database save logic here
+    return this;
+  }
+
+  // Update last login timestamp
+  async updateLastLogin() {
+    this.lastLogin = new Date();
+    await this.save();
+  }
+
+  // Connect wallet to existing user
+  async connectWallet(walletAddress, privateKey = null) {
+    this.walletAddress = walletAddress.toLowerCase();
+    if (privateKey) {
+      this.privateKey = privateKey;
+    }
+    this.updatedAt = new Date();
+    await this.save();
+  }
+
+  // Convert to database-friendly object (for saving)
+  toDatabaseObject() {
+    return {
+      id: this.id,
+      username: this.username,
+      email: this.email,
+      passwordHash: this.passwordHash,
+      walletAddress: this.walletAddress,
+      privateKey: this.privateKey,
+      isGuest: this.isGuest,
+      pets: this.pets.map((pet) => (pet.toJSON ? pet.toJSON() : pet)),
+      eggs: this.eggs.map((egg) => (egg.toJSON ? egg.toJSON() : egg)),
+      techniques: this.techniques,
+      skins: this.skins,
+      balance: this.balance,
+      freeRolls: this.freeRolls,
+      level: this.level,
+      experience: this.experience,
+      rank: this.rank,
+      battlesWon: this.battlesWon,
+      battlesLost: this.battlesLost,
+      completedQuests: this.completedQuests,
+      consecutiveDays: this.consecutiveDays,
+      lastDailyClaim: this.lastDailyClaim,
+      lastFreeHatch: this.lastFreeHatch,
+      nftTokens: this.nftTokens,
+      transactions: this.transactions,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      lastLogin: this.lastLogin,
+    };
+  }
+
+  // Create User instance from database object
+  static fromDatabaseObject(data) {
+    return new User({
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      passwordHash: data.passwordHash,
+      walletAddress: data.walletAddress,
+      privateKey: data.privateKey,
+      isGuest: data.isGuest,
+      pets: data.pets || [],
+      eggs: data.eggs || [],
+      techniques: data.techniques || [],
+      skins: data.skins || [],
+      balance: data.balance || 0,
+      freeRolls: data.freeRolls || 0,
+      level: data.level || 1,
+      experience: data.experience || 0,
+      rank: data.rank || "Beginner",
+      battlesWon: data.battlesWon || 0,
+      battlesLost: data.battlesLost || 0,
+      completedQuests: data.completedQuests || [],
+      consecutiveDays: data.consecutiveDays || 1,
+      lastDailyClaim: data.lastDailyClaim,
+      lastFreeHatch: data.lastFreeHatch,
+      nftTokens: data.nftTokens || [],
+      transactions: data.transactions || [],
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      lastLogin: data.lastLogin,
+    });
   }
 
   /** --- 🎮 Game Functions --- **/
@@ -157,6 +295,19 @@ export class User {
     this.updatedAt = new Date();
   }
 
+  addFreeRolls(amount) {
+    this.freeRolls += amount;
+    this.updatedAt = new Date();
+  }
+
+  useFreeRoll() {
+    if (this.freeRolls <= 0) {
+      throw new Error("No free rolls available");
+    }
+    this.freeRolls--;
+    this.updatedAt = new Date();
+  }
+
   /** --- 🔗 Blockchain Integration --- **/
 
   addTransaction(transaction) {
@@ -179,6 +330,21 @@ export class User {
     this.updatedAt = new Date();
   }
 
+  /** --- 📊 Statistics --- **/
+
+  get totalBattles() {
+    return this.battlesWon + this.battlesLost;
+  }
+
+  get winRate() {
+    const total = this.totalBattles;
+    return total > 0 ? (this.battlesWon / total) * 100 : 0;
+  }
+
+  get petsHatched() {
+    return this.pets.length;
+  }
+
   /** --- 🔍 Utility --- **/
 
   toJSON() {
@@ -187,9 +353,10 @@ export class User {
       username: this.username,
       email: this.email,
       walletAddress: this.walletAddress,
-      // Don't expose private key in JSON output!
+      isGuest: this.isGuest,
       pets: this.pets.map((pet) => pet.toJSON()),
       eggs: this.eggs.map((egg) => ({
+        id: egg.id,
         type: egg.type,
         ownerId: egg.ownerId,
         isHatched: egg.isHatched,
@@ -198,14 +365,25 @@ export class User {
       techniques: this.techniques,
       skins: this.skins,
       balance: this.balance,
-      nftTokens: this.nftTokens,
-      transactions: this.transactions,
+      freeRolls: this.freeRolls,
       level: this.level,
       experience: this.experience,
       rank: this.rank,
+      battlesWon: this.battlesWon,
+      battlesLost: this.battlesLost,
+      completedQuests: this.completedQuests,
+      consecutiveDays: this.consecutiveDays,
+      lastDailyClaim: this.lastDailyClaim,
+      lastFreeHatch: this.lastFreeHatch,
+      nftTokens: this.nftTokens,
+      transactions: this.transactions,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       lastLogin: this.lastLogin,
+      // Virtual properties
+      totalBattles: this.totalBattles,
+      winRate: this.winRate,
+      petsHatched: this.petsHatched,
     };
   }
 }

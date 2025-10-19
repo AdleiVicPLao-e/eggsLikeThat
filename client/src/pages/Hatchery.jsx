@@ -5,19 +5,23 @@ import { useWallet } from "../hooks/useWallet";
 import PetCard from "../components/Pets/PetCard";
 import HatchAnimation from "../components/Game/HatchAnimation";
 import { Coins, Zap, Gift, Sparkles, ShoppingCart, Wallet } from "lucide-react";
-import {
-  EGG_TYPES,
-  PET_RARITIES,
-  CURRENCIES,
-  GAME_CONFIG,
-} from "../utils/constants";
+import { EGG_TYPES, PET_RARITIES, CURRENCIES } from "../utils/constants";
 
 const Hatchery = () => {
   const { user, isAuthenticated, updateProfile } = useUser();
   const { pets, eggs, addPet, addEgg, updateCoins, updateFreeRolls, gameAPI } =
     useGame();
-  const { account, isConnected, connect, registerWithWallet, loginWithWallet } =
-    useWallet();
+  const {
+    account,
+    isConnected,
+    connect,
+    registerWithWallet,
+    loginWithWallet,
+    getUserNFTs,
+    networkConfig,
+    switchNetwork,
+    isLoading: walletLoading,
+  } = useWallet();
 
   const [newlyHatchedPet, setNewlyHatchedPet] = useState(null);
   const [showHatchAnimation, setShowHatchAnimation] = useState(false);
@@ -26,11 +30,20 @@ const Hatchery = () => {
   const [useBlockchainHatch, setUseBlockchainHatch] = useState(false);
   const [isHatching, setIsHatching] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [blockchainPets, setBlockchainPets] = useState([]);
+  const [blockchainEggs, setBlockchainEggs] = useState([]);
 
   // Load egg preview from API when egg type changes
   useEffect(() => {
     loadEggPreview();
   }, [selectedEggType]);
+
+  // Load blockchain NFTs when wallet connects
+  useEffect(() => {
+    if (isConnected && account) {
+      loadBlockchainNFTs();
+    }
+  }, [isConnected, account]);
 
   const loadEggPreview = async () => {
     try {
@@ -46,6 +59,18 @@ const Hatchery = () => {
       ]);
     } catch (error) {
       console.error("Failed to load egg preview:", error);
+    }
+  };
+
+  const loadBlockchainNFTs = async () => {
+    try {
+      const result = await getUserNFTs();
+      if (result.success) {
+        setBlockchainPets(result.pets || []);
+        setBlockchainEggs(result.eggs || []);
+      }
+    } catch (error) {
+      console.error("Failed to load blockchain NFTs:", error);
     }
   };
 
@@ -106,9 +131,18 @@ const Hatchery = () => {
     }
   };
 
-  // Hatch egg
+  // Hatch egg - now supports both traditional and blockchain hatching
   const hatchEgg = async (eggId = null) => {
     if (!isAuthenticated) return;
+
+    // Check network for blockchain hatching
+    if (useBlockchainHatch && !isCorrectNetwork) {
+      const switchResult = await switchNetwork(31337);
+      if (!switchResult.success) {
+        alert("Please switch to localhost network for blockchain hatching");
+        return;
+      }
+    }
 
     setIsHatching(true);
 
@@ -125,11 +159,25 @@ const Hatchery = () => {
     setShowHatchAnimation(true);
 
     try {
-      const result = await gameAPI.hatchEgg({
-        eggId,
-        useFreeRoll: canUseFreeRoll,
-        eggType: selectedEggType,
-      });
+      let result;
+
+      if (useBlockchainHatch && isConnected) {
+        // Blockchain hatching - this would need to be implemented in your backend
+        // to mint the NFT after hatching
+        result = await gameAPI.hatchEggOnBlockchain({
+          eggId,
+          useFreeRoll: canUseFreeRoll,
+          eggType: selectedEggType,
+          walletAddress: account,
+        });
+      } else {
+        // Traditional hatching
+        result = await gameAPI.hatchEgg({
+          eggId,
+          useFreeRoll: canUseFreeRoll,
+          eggType: selectedEggType,
+        });
+      }
 
       if (result.success && result.data.pet) {
         addPet(result.data.pet);
@@ -139,6 +187,11 @@ const Hatchery = () => {
           updateCoins(-hatchCost);
         } else {
           updateFreeRolls(-1);
+        }
+
+        // Reload blockchain NFTs if using blockchain
+        if (useBlockchainHatch) {
+          await loadBlockchainNFTs();
         }
 
         // Auto-hide animation after delay
@@ -253,6 +306,51 @@ const Hatchery = () => {
     return { name: typeNames[type] || type };
   };
 
+  // Check if we're on the correct network for blockchain features
+  const isCorrectNetwork = networkConfig?.name === "localhost";
+
+  // Get connection status message
+  const getConnectionStatus = () => {
+    if (!isConnected) {
+      return (
+        <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-lg p-3">
+          <p className="text-yellow-400 text-sm">
+            🔗 Connect your wallet for blockchain features
+          </p>
+        </div>
+      );
+    }
+
+    if (!isCorrectNetwork) {
+      return (
+        <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-lg p-3">
+          <p className="text-yellow-400 text-sm">
+            🌐 Switch to localhost for blockchain hatching
+          </p>
+          <button
+            onClick={() => switchNetwork(31337)}
+            className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
+            disabled={walletLoading}
+          >
+            {walletLoading ? "Switching..." : "Switch to Localhost"}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-green-500 bg-opacity-20 border border-green-500 rounded-lg p-3">
+        <p className="text-green-400 text-sm">
+          ✅ Connected to {account?.slice(0, 8)}... on {networkConfig.name}
+        </p>
+        <div className="mt-1 text-xs text-green-300">
+          Blockchain pets: {blockchainPets.length} • Blockchain eggs:{" "}
+          {blockchainEggs.length}
+        </div>
+      </div>
+    );
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
@@ -298,6 +396,9 @@ const Hatchery = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Egg Selection & Purchase */}
           <div className="space-y-6">
+            {/* Wallet Connection Status */}
+            {getConnectionStatus()}
+
             {/* Egg Type Selection */}
             <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
               <h3 className="text-xl font-bold text-white mb-4">
@@ -353,14 +454,7 @@ const Hatchery = () => {
                   {isPurchasing ? "Purchasing..." : "Buy with Coins"}
                 </button>
 
-                {isConnected ? (
-                  <div className="p-3 bg-green-500 bg-opacity-20 rounded-lg border border-green-500 text-center">
-                    <div className="text-green-400 text-sm font-medium flex items-center justify-center">
-                      <Wallet className="w-4 h-4 mr-2" />
-                      Wallet Connected
-                    </div>
-                  </div>
-                ) : (
+                {!isConnected && (
                   <button
                     onClick={handleConnectWallet}
                     className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center"
@@ -445,6 +539,29 @@ const Hatchery = () => {
                       Ready to hatch an amazing pet!
                     </p>
 
+                    {/* Blockchain Hatch Option */}
+                    {isConnected && (
+                      <div className="mb-4 flex items-center justify-center space-x-2 p-3 bg-gray-700 rounded-lg">
+                        <input
+                          type="checkbox"
+                          id="blockchainHatch"
+                          checked={useBlockchainHatch}
+                          onChange={(e) =>
+                            setUseBlockchainHatch(e.target.checked)
+                          }
+                          disabled={isHatching || !isCorrectNetwork}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <label
+                          htmlFor="blockchainHatch"
+                          className="text-gray-300 text-sm flex items-center"
+                        >
+                          Hatch as NFT on Blockchain
+                          <Sparkles className="w-4 h-4 text-purple-400 ml-1" />
+                        </label>
+                      </div>
+                    )}
+
                     {/* Hatch Options */}
                     <div className="space-y-4">
                       <button
@@ -452,7 +569,8 @@ const Hatchery = () => {
                         disabled={
                           isHatching ||
                           (user.freeRolls === 0 &&
-                            user.coins < (GAME_CONFIG?.HATCH_COST || 50))
+                            user.coins < (GAME_CONFIG?.HATCH_COST || 50)) ||
+                          (useBlockchainHatch && !isCorrectNetwork)
                         }
                         className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
                       >
@@ -468,25 +586,9 @@ const Hatchery = () => {
                         )}
                       </button>
 
-                      {isConnected && (
-                        <div className="flex items-center justify-center space-x-2 p-3 bg-gray-700 rounded-lg">
-                          <input
-                            type="checkbox"
-                            id="blockchainHatch"
-                            checked={useBlockchainHatch}
-                            onChange={(e) =>
-                              setUseBlockchainHatch(e.target.checked)
-                            }
-                            disabled={isHatching}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                          />
-                          <label
-                            htmlFor="blockchainHatch"
-                            className="text-gray-300 text-sm"
-                          >
-                            Hatch on Blockchain
-                          </label>
-                          <Sparkles className="w-4 h-4 text-purple-400" />
+                      {useBlockchainHatch && isCorrectNetwork && (
+                        <div className="text-xs text-blue-400 text-center">
+                          🚀 This pet will be minted as an NFT on the blockchain
                         </div>
                       )}
                     </div>
@@ -500,7 +602,7 @@ const Hatchery = () => {
               <div className="bg-gray-800 rounded-2xl p-6 border-2 border-green-500 animate-pulse">
                 <h3 className="text-xl font-bold text-white mb-4 text-center flex items-center justify-center">
                   <Sparkles className="w-5 h-5 mr-2 text-yellow-400" />
-                  New Pet Hatched!
+                  {useBlockchainHatch ? "NFT Pet Minted!" : "New Pet Hatched!"}
                   <Sparkles className="w-5 h-5 ml-2 text-yellow-400" />
                 </h3>
                 <div className="flex justify-center">
@@ -508,6 +610,13 @@ const Hatchery = () => {
                     <PetCard pet={newlyHatchedPet} />
                   </div>
                 </div>
+                {useBlockchainHatch && (
+                  <div className="mt-3 text-center">
+                    <p className="text-green-400 text-sm">
+                      ✅ Successfully minted on the blockchain!
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -542,11 +651,23 @@ const Hatchery = () => {
               <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
                 <div className="text-center p-2 bg-gray-700 rounded">
                   <div className="text-white font-bold">{pets.length}</div>
-                  <div className="text-gray-400">Total Pets</div>
+                  <div className="text-gray-400">Game Pets</div>
+                </div>
+                <div className="text-center p-2 bg-gray-700 rounded">
+                  <div className="text-white font-bold">
+                    {blockchainPets.length}
+                  </div>
+                  <div className="text-gray-400">NFT Pets</div>
                 </div>
                 <div className="text-center p-2 bg-gray-700 rounded">
                   <div className="text-white font-bold">{eggs.length}</div>
-                  <div className="text-gray-400">Total Eggs</div>
+                  <div className="text-gray-400">Game Eggs</div>
+                </div>
+                <div className="text-center p-2 bg-gray-700 rounded">
+                  <div className="text-white font-bold">
+                    {blockchainEggs.length}
+                  </div>
+                  <div className="text-gray-400">NFT Eggs</div>
                 </div>
               </div>
             </div>
@@ -556,11 +677,11 @@ const Hatchery = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-white">Your Eggs</h3>
                 <span className="text-gray-400 text-sm">
-                  {eggs.length} total
+                  {eggs.length} game • {blockchainEggs.length} NFT
                 </span>
               </div>
 
-              {eggs.length === 0 ? (
+              {eggs.length === 0 && blockchainEggs.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-6xl mb-4">🥚</div>
                   <p className="text-gray-400">No eggs yet</p>
@@ -570,9 +691,10 @@ const Hatchery = () => {
                 </div>
               ) : (
                 <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
-                  {eggs.slice(0, 5).map((egg, index) => (
+                  {/* Game Eggs */}
+                  {eggs.slice(0, 3).map((egg, index) => (
                     <div
-                      key={egg.id || index}
+                      key={`game-${egg.id || index}`}
                       className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
                     >
                       <div className="flex items-center space-x-3">
@@ -601,10 +723,37 @@ const Hatchery = () => {
                     </div>
                   ))}
 
-                  {eggs.length > 5 && (
+                  {/* Blockchain Eggs */}
+                  {blockchainEggs.slice(0, 2).map((egg, index) => (
+                    <div
+                      key={`blockchain-${index}`}
+                      className="flex items-center justify-between p-3 bg-purple-700 rounded-lg border border-purple-500"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                          🥚
+                        </div>
+                        <div>
+                          <div className="text-white font-medium flex items-center">
+                            {egg.name}
+                            <Sparkles className="w-3 h-3 text-purple-300 ml-1" />
+                          </div>
+                          <div className="text-purple-300 text-sm">
+                            NFT • Balance: {egg.balance}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-purple-300 text-xs">On Chain</div>
+                    </div>
+                  ))}
+
+                  {(eggs.length > 3 || blockchainEggs.length > 2) && (
                     <div className="text-center pt-2">
                       <span className="text-gray-400 text-sm">
-                        +{eggs.length - 5} more eggs
+                        +
+                        {Math.max(eggs.length - 3, 0) +
+                          Math.max(blockchainEggs.length - 2, 0)}{" "}
+                        more eggs
                       </span>
                     </div>
                   )}
@@ -615,9 +764,9 @@ const Hatchery = () => {
             {/* Pet Inventory Summary */}
             <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
               <h3 className="text-xl font-bold text-white mb-4">
-                Your Pets ({pets.length})
+                Your Pets ({pets.length + blockchainPets.length})
               </h3>
-              {pets.length === 0 ? (
+              {pets.length === 0 && blockchainPets.length === 0 ? (
                 <p className="text-gray-400 text-center py-4">
                   No pets yet. Hatch some eggs!
                 </p>
@@ -626,10 +775,15 @@ const Hatchery = () => {
                   {/* Tier Summary */}
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     {Object.values(PET_RARITIES).map((tier) => {
-                      const count = pets.filter(
+                      const gameCount = pets.filter(
                         (pet) => pet.tier === tier
                       ).length;
-                      if (count === 0) return null;
+                      const blockchainCount = blockchainPets.filter(
+                        (pet) => pet.rarity === tier
+                      ).length;
+                      const totalCount = gameCount + blockchainCount;
+
+                      if (totalCount === 0) return null;
 
                       return (
                         <div
@@ -644,7 +798,16 @@ const Hatchery = () => {
                             <span>{formatTier(tier).emoji}</span>
                             <span>{tier}</span>
                           </span>
-                          <span className="text-white font-bold">{count}</span>
+                          <div className="flex items-center space-x-2">
+                            {blockchainCount > 0 && (
+                              <span className="text-purple-400 text-xs">
+                                {blockchainCount} NFT
+                              </span>
+                            )}
+                            <span className="text-white font-bold">
+                              {totalCount}
+                            </span>
+                          </div>
                         </div>
                       );
                     })}
@@ -652,7 +815,7 @@ const Hatchery = () => {
 
                   <div className="pt-2 border-t border-gray-600 text-center">
                     <p className="text-gray-400 text-sm">
-                      View all pets in your collection
+                      {pets.length} game pets • {blockchainPets.length} NFT pets
                     </p>
                   </div>
                 </div>

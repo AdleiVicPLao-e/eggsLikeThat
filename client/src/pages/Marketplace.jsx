@@ -14,14 +14,26 @@ import {
   Users,
   RefreshCw,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { PET_RARITIES, CURRENCIES } from "../utils/constants";
 
 const Marketplace = () => {
   const { user, isAuthenticated } = useUser();
   const { pets, coins, gameAPI } = useGame();
-  const { account, isConnected, connect, registerWithWallet, loginWithWallet } =
-    useWallet();
+  const {
+    account,
+    isConnected,
+    connect,
+    registerWithWallet,
+    loginWithWallet,
+    getUserNFTs,
+    networkConfig,
+    switchNetwork,
+    isLoading: walletLoading,
+    getMarketplaceListings,
+    buyNFTFromMarketplace,
+  } = useWallet();
 
   const [listings, setListings] = useState([]);
   const [userListings, setUserListings] = useState([]);
@@ -44,6 +56,8 @@ const Marketplace = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("browse");
+  const [blockchainPets, setBlockchainPets] = useState([]);
+  const [blockchainListings, setBlockchainListings] = useState([]);
 
   // Load marketplace data
   useEffect(() => {
@@ -52,31 +66,51 @@ const Marketplace = () => {
     }
   }, [isAuthenticated]);
 
+  // Load blockchain data when wallet connects
+  useEffect(() => {
+    if (isConnected) {
+      loadBlockchainData();
+    }
+  }, [isConnected]);
+
   // Filter and search listings
   useEffect(() => {
-    let result = listings;
+    let result = [...listings, ...blockchainListings];
 
     // Search filter
     if (searchTerm) {
       result = result.filter(
         (listing) =>
           listing.pet?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          listing.pet?.type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          listing.pet?.tier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          listing.pet?.petType
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          listing.pet?.rarity
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
           listing.seller?.username
             ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
+            .includes(searchTerm.toLowerCase()) ||
+          listing.seller?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Tier filter
     if (filters.tier !== "all") {
-      result = result.filter((listing) => listing.pet?.tier === filters.tier);
+      result = result.filter(
+        (listing) =>
+          listing.pet?.tier === filters.tier ||
+          listing.pet?.rarity === filters.tier
+      );
     }
 
     // Type filter
     if (filters.type !== "all") {
-      result = result.filter((listing) => listing.pet?.type === filters.type);
+      result = result.filter(
+        (listing) =>
+          listing.pet?.type === filters.tier ||
+          listing.pet?.petType === filters.type
+      );
     }
 
     // Currency filter
@@ -100,12 +134,16 @@ const Marketplace = () => {
         break;
       case "newest":
         result = [...result].sort(
-          (a, b) => new Date(b.listedAt) - new Date(a.listedAt)
+          (a, b) =>
+            new Date(b.listedAt || b.createdAt) -
+            new Date(a.listedAt || a.createdAt)
         );
         break;
       case "oldest":
         result = [...result].sort(
-          (a, b) => new Date(a.listedAt) - new Date(b.listedAt)
+          (a, b) =>
+            new Date(a.listedAt || a.createdAt) -
+            new Date(b.listedAt || b.createdAt)
         );
         break;
       default:
@@ -113,7 +151,7 @@ const Marketplace = () => {
     }
 
     setFilteredListings(result);
-  }, [listings, searchTerm, filters]);
+  }, [listings, blockchainListings, searchTerm, filters]);
 
   const loadMarketplaceData = async () => {
     if (!isAuthenticated) return;
@@ -163,6 +201,47 @@ const Marketplace = () => {
     }
   };
 
+  const loadBlockchainData = async () => {
+    try {
+      // Load blockchain NFTs
+      const nftsResult = await getUserNFTs();
+      if (nftsResult.success) {
+        setBlockchainPets(nftsResult.pets || []);
+      }
+
+      // Load blockchain marketplace listings
+      const blockchainListingsResult = await getMarketplaceListings();
+      if (blockchainListingsResult) {
+        const formattedListings = blockchainListingsResult.map((listing) => ({
+          id: `blockchain_${listing.listingId}`,
+          listingId: listing.listingId,
+          seller: listing.seller,
+          price: listing.price,
+          currency: "ETH", // Blockchain listings are always in ETH
+          pet: {
+            id: `blockchain_${listing.tokenId}`,
+            tokenId: listing.tokenId,
+            name: `Blockchain Pet #${listing.tokenId}`,
+            tier: PET_RARITIES.RARE, // You'd need to fetch actual metadata
+            type: "UNKNOWN",
+            abilities: ["Blockchain Native"],
+            stats: { attack: 100, defense: 100, speed: 100, health: 100 },
+            level: 1,
+            isBlockchain: true,
+          },
+          listedAt: new Date(), // You'd get this from events
+          status: "listed",
+          isBlockchain: true,
+          nftContract: listing.nftContract,
+          itemType: listing.itemType,
+        }));
+        setBlockchainListings(formattedListings);
+      }
+    } catch (error) {
+      console.error("Error loading blockchain data:", error);
+    }
+  };
+
   const loadMockData = () => {
     const mockListings = [
       {
@@ -205,46 +284,6 @@ const Marketplace = () => {
         listedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
         status: "listed",
       },
-      {
-        id: "listing_3",
-        seller: {
-          username: "EarthGuardian",
-          walletAddress: "0x9999...8888",
-        },
-        price: 0.008,
-        currency: "MATIC",
-        pet: {
-          id: "market_3",
-          name: "Earth Golem",
-          tier: PET_RARITIES.RARE,
-          type: "EARTH",
-          abilities: ["Earth Slam"],
-          stats: { attack: 120, defense: 180, speed: 80, health: 220 },
-          level: 6,
-        },
-        listedAt: new Date(Date.now() - 1000 * 60 * 60 * 12),
-        status: "listed",
-      },
-      {
-        id: "listing_4",
-        seller: {
-          username: "SkyHunter",
-          walletAddress: "0x7777...6666",
-        },
-        price: 0.003,
-        currency: "ETH",
-        pet: {
-          id: "market_4",
-          name: "Air Falcon",
-          tier: PET_RARITIES.UNCOMMON,
-          type: "AIR",
-          abilities: ["Air Slash"],
-          stats: { attack: 100, defense: 80, speed: 160, health: 140 },
-          level: 4,
-        },
-        listedAt: new Date(Date.now() - 1000 * 60 * 30),
-        status: "listed",
-      },
     ];
 
     setListings(mockListings);
@@ -265,6 +304,8 @@ const Marketplace = () => {
       if (!loginResult.success) {
         await registerWithWallet({ username: `user_${account.slice(2, 8)}` });
       }
+      // Reload blockchain data after connection
+      await loadBlockchainData();
     }
   };
 
@@ -274,6 +315,12 @@ const Marketplace = () => {
       if (connect) {
         handleConnectWallet();
       }
+      return;
+    }
+
+    // Check network for blockchain listing
+    if (!isCorrectNetwork) {
+      alert("Please switch to localhost network to list pets on blockchain");
       return;
     }
 
@@ -288,8 +335,47 @@ const Marketplace = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadMarketplaceData();
+    await Promise.all([
+      loadMarketplaceData(),
+      isConnected && loadBlockchainData(),
+    ]);
     setRefreshing(false);
+  };
+
+  // Handle blockchain purchase
+  const handleBlockchainPurchase = async (listing) => {
+    if (!isConnected) {
+      alert("Please connect your wallet to purchase");
+      return;
+    }
+
+    if (!isCorrectNetwork) {
+      const switchResult = await switchNetwork(31337);
+      if (!switchResult.success) {
+        alert("Please switch to localhost network to purchase");
+        return;
+      }
+    }
+
+    try {
+      const result = await buyNFTFromMarketplace(
+        listing.listingId,
+        listing.price
+      );
+      if (result.success) {
+        alert(
+          "Purchase successful! The NFT has been transferred to your wallet."
+        );
+        // Reload data
+        await loadBlockchainData();
+        await loadMarketplaceData();
+      } else {
+        alert(`Purchase failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Purchase error:", error);
+      alert(`Purchase failed: ${error.message}`);
+    }
   };
 
   // Format currency for display
@@ -338,35 +424,60 @@ const Marketplace = () => {
         bgColor: "bg-red-500",
         textColor: "text-red-300",
       },
-      [PET_RARITIES.CELESTIAL]: {
-        emoji: "⚡",
-        bgColor: "bg-indigo-500",
-        textColor: "text-indigo-300",
-      },
-      [PET_RARITIES.EXOTIC]: {
-        emoji: "🌈",
-        bgColor: "bg-pink-500",
-        textColor: "text-pink-300",
-      },
-      [PET_RARITIES.ULTIMATE]: {
-        emoji: "👑",
-        bgColor: "bg-orange-500",
-        textColor: "text-orange-300",
-      },
-      [PET_RARITIES.GODLY]: {
-        emoji: "✨",
-        bgColor: "bg-cyan-500",
-        textColor: "text-cyan-300",
-      },
     };
     return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
+  };
+
+  // Check if we're on the correct network for blockchain features
+  const isCorrectNetwork = networkConfig?.name === "localhost";
+
+  // Get connection status message
+  const getConnectionStatus = () => {
+    if (!isConnected) {
+      return (
+        <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-lg p-3">
+          <p className="text-yellow-400 text-sm">
+            🔗 Connect your wallet for blockchain features
+          </p>
+        </div>
+      );
+    }
+
+    if (!isCorrectNetwork) {
+      return (
+        <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded-lg p-3">
+          <p className="text-yellow-400 text-sm">
+            🌐 Switch to localhost for blockchain trading
+          </p>
+          <button
+            onClick={() => switchNetwork(31337)}
+            className="mt-2 px-3 py-1 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600"
+            disabled={walletLoading}
+          >
+            {walletLoading ? "Switching..." : "Switch to Localhost"}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-green-500 bg-opacity-20 border border-green-500 rounded-lg p-3">
+        <p className="text-green-400 text-sm">
+          ✅ Connected to {account?.slice(0, 8)}... on {networkConfig.name}
+        </p>
+        <div className="mt-1 text-xs text-green-300">
+          Blockchain pets: {blockchainPets.length} • Blockchain listings:{" "}
+          {blockchainListings.length}
+        </div>
+      </div>
+    );
   };
 
   const statCards = [
     {
       icon: Store,
       label: "Total Listings",
-      value: formatNumber(stats.totalListings),
+      value: formatNumber(stats.totalListings + blockchainListings.length),
       color: "blue",
     },
     {
@@ -392,20 +503,27 @@ const Marketplace = () => {
   const canListPet = (pet) => {
     return (
       isConnected &&
+      isCorrectNetwork &&
       pet.tokenId &&
       !userListings.some(
         (listing) => listing.pet?.id === pet.id && listing.status === "listed"
+      ) &&
+      !blockchainListings.some(
+        (listing) => listing.pet?.tokenId === pet.tokenId
       )
     );
   };
 
   const getPetStatus = (pet) => {
     if (!isConnected) return { status: "no-wallet", message: "Connect wallet" };
+    if (!isCorrectNetwork)
+      return { status: "wrong-network", message: "Switch network" };
     if (!pet.tokenId) return { status: "not-minted", message: "Not minted" };
     if (
       userListings.some(
         (listing) => listing.pet?.id === pet.id && listing.status === "listed"
-      )
+      ) ||
+      blockchainListings.some((listing) => listing.pet?.tokenId === pet.tokenId)
     ) {
       return { status: "listed", message: "Already listed" };
     }
@@ -499,35 +617,10 @@ const Marketplace = () => {
           })}
         </div>
 
-        {/* Wallet Connection Banner */}
-        {!isConnected && (
-          <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 mb-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Wallet className="w-8 h-8 text-white" />
-                <div>
-                  <h3 className="text-xl font-bold text-white">
-                    Connect Your Wallet
-                  </h3>
-                  <p className="text-blue-100">
-                    Connect your wallet to buy, sell, and trade pets on the
-                    blockchain
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={handleConnectWallet}
-                variant="white"
-                className="flex items-center space-x-2"
-              >
-                <Wallet className="w-4 h-4" />
-                <span>Connect Wallet</span>
-              </Button>
-            </div>
-          </div>
-        )}
+        {/* Wallet Connection & Status */}
+        {getConnectionStatus()}
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mt-6">
           {/* Left Column - Filters & Navigation */}
           <div className="space-y-6">
             {/* Navigation Tabs */}
@@ -684,21 +777,24 @@ const Marketplace = () => {
                   <span className="text-white font-bold">{pets.length}</span>
                 </div>
                 <div className="flex items-center justify-between">
+                  <span className="text-gray-400">NFT Pets</span>
+                  <span className="text-purple-400 font-bold flex items-center">
+                    {blockchainPets.length}
+                    <Sparkles className="w-3 h-3 ml-1" />
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
                   <span className="text-gray-400">Active Listings</span>
                   <span className="text-white font-bold">
-                    {userListings.filter((l) => l.status === "listed").length}
+                    {userListings.filter((l) => l.status === "listed").length +
+                      blockchainListings.filter((l) => l.seller === account)
+                        .length}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">Your Balance</span>
                   <span className="text-yellow-400 font-bold">
                     {formatCurrency(coins, "coins")}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Player Level</span>
-                  <span className="text-blue-400 font-bold">
-                    Lvl {user?.level || 1}
                   </span>
                 </div>
               </div>
@@ -752,8 +848,10 @@ const Marketplace = () => {
                       <ListingCard
                         key={listing.id}
                         listing={listing}
-                        onPurchaseSuccess={loadMarketplaceData}
-                        canPurchase={isConnected}
+                        onPurchaseSuccess={handleRefresh}
+                        onBlockchainPurchase={handleBlockchainPurchase}
+                        canPurchase={isConnected && isCorrectNetwork}
+                        isBlockchain={listing.isBlockchain}
                       />
                     ))}
                   </div>
@@ -766,7 +864,7 @@ const Marketplace = () => {
               <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-white">
-                    My Pets ({pets.length})
+                    My Pets ({pets.length + blockchainPets.length})
                   </h2>
                   {!isConnected && (
                     <Button
@@ -780,7 +878,7 @@ const Marketplace = () => {
                   )}
                 </div>
 
-                {pets.length === 0 ? (
+                {pets.length === 0 && blockchainPets.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">🐾</div>
                     <h3 className="text-xl font-bold text-white mb-2">
@@ -798,6 +896,7 @@ const Marketplace = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {/* Game Pets */}
                     {pets.map((pet) => {
                       const petStatus = getPetStatus(pet);
 
@@ -870,12 +969,49 @@ const Marketplace = () => {
                               "🔄 Mint First"}
                             {petStatus.status === "no-wallet" &&
                               "🔗 Connect Wallet"}
+                            {petStatus.status === "wrong-network" &&
+                              "🌐 Switch Network"}
                             {petStatus.status === "can-list" &&
                               "💰 List for Sale"}
                           </Button>
                         </div>
                       );
                     })}
+
+                    {/* Blockchain Pets */}
+                    {blockchainPets.map((pet) => (
+                      <div
+                        key={`blockchain-${pet.tokenId}`}
+                        className="bg-purple-700 rounded-xl p-4 border border-purple-500"
+                      >
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                            <Sparkles className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-white font-bold flex items-center">
+                              {pet.name}
+                              <Sparkles className="w-3 h-3 text-purple-300 ml-1" />
+                            </div>
+                            <div className="text-purple-300 text-sm capitalize">
+                              {pet.rarity?.toLowerCase()} • Lvl {pet.level}
+                            </div>
+                            <div className="text-purple-200 text-xs">
+                              Token #{pet.tokenId}
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => handleListPet(pet)}
+                          className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                        >
+                          💰 List on Blockchain
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -886,7 +1022,11 @@ const Marketplace = () => {
               <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-white">
-                    My Listings ({userListings.length})
+                    My Listings (
+                    {userListings.length +
+                      blockchainListings.filter((l) => l.seller === account)
+                        .length}
+                    )
                   </h2>
                   {!isConnected && (
                     <Button
@@ -914,7 +1054,9 @@ const Marketplace = () => {
                       Connect Wallet
                     </Button>
                   </div>
-                ) : userListings.length === 0 ? (
+                ) : userListings.length === 0 &&
+                  blockchainListings.filter((l) => l.seller === account)
+                    .length === 0 ? (
                   <div className="text-center py-12">
                     <div className="text-6xl mb-4">📝</div>
                     <h3 className="text-xl font-bold text-white mb-2">
@@ -936,10 +1078,21 @@ const Marketplace = () => {
                       <ListingCard
                         key={listing.id}
                         listing={listing}
-                        onPurchaseSuccess={loadMarketplaceData}
+                        onPurchaseSuccess={handleRefresh}
                         isOwnListing={true}
                       />
                     ))}
+                    {blockchainListings
+                      .filter((listing) => listing.seller === account)
+                      .map((listing) => (
+                        <ListingCard
+                          key={listing.id}
+                          listing={listing}
+                          onPurchaseSuccess={handleRefresh}
+                          isOwnListing={true}
+                          isBlockchain={true}
+                        />
+                      ))}
                   </div>
                 )}
               </div>
@@ -957,7 +1110,7 @@ const Marketplace = () => {
         }}
         pet={selectedPet}
         onListSuccess={() => {
-          loadMarketplaceData();
+          handleRefresh();
         }}
       />
     </div>

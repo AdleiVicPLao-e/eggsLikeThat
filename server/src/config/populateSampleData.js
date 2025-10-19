@@ -1,6 +1,6 @@
 // server/config/populateSampleData.js
 import { DatabaseService } from "../services/DatabaseService.js";
-import { BlockchainSimulationService } from "../services/BlockchainSimulationService.js";
+import { blockchainService } from "./blockchain.js";
 import { Pet } from "../models/Pet.js";
 import { Egg } from "../models/Egg.js";
 import { User } from "../models/User.js";
@@ -9,15 +9,22 @@ import {
   SKIN_RARITIES,
   EGG_TYPES,
   TECHNIQUES,
-  TYPES,
+  PET_TYPES,
   ALL_ABILITIES,
 } from "../utils/constants.js";
 import mongoose from "mongoose";
 
+// Import blockchain constants
+import {
+  ITEM_TYPES,
+  EGG_TYPES as BLOCKCHAIN_EGG_TYPES,
+  SKIN_TYPES as BLOCKCHAIN_SKIN_TYPES,
+} from "./blockchain.js";
+
 export class SampleDataPopulator {
   constructor() {
     this.dbService = new DatabaseService();
-    this.blockchainService = new BlockchainSimulationService();
+    this.blockchainService = blockchainService;
   }
 
   // Sample users data matching your User model
@@ -74,7 +81,7 @@ export class SampleDataPopulator {
     },
   ];
 
-  // Sample pets data matching your Pet model structure
+  // Sample pets data matching your Pet model structure AND blockchain metadata
   samplePets = [
     {
       name: "Pikachu",
@@ -97,6 +104,13 @@ export class SampleDataPopulator {
       evolutionStage: 1,
       evolutions: ["Raichu"],
       isShiny: true,
+      // Blockchain metadata
+      blockchainMetadata: {
+        petType: "Electric",
+        rarity: "Rare",
+        level: 5,
+        isShiny: true,
+      },
     },
     {
       name: "Charizard",
@@ -119,6 +133,12 @@ export class SampleDataPopulator {
       evolutionStage: 3,
       evolutions: ["Charmander", "Charmeleon"],
       isShiny: false,
+      blockchainMetadata: {
+        petType: "Fire",
+        rarity: "Epic",
+        level: 36,
+        isShiny: false,
+      },
     },
     {
       name: "Blastoise",
@@ -141,6 +161,12 @@ export class SampleDataPopulator {
       evolutionStage: 3,
       evolutions: ["Squirtle", "Wartortle"],
       isShiny: false,
+      blockchainMetadata: {
+        petType: "Water",
+        rarity: "Epic",
+        level: 36,
+        isShiny: false,
+      },
     },
     {
       name: "Venusaur",
@@ -163,6 +189,12 @@ export class SampleDataPopulator {
       evolutionStage: 3,
       evolutions: ["Bulbasaur", "Ivysaur"],
       isShiny: false,
+      blockchainMetadata: {
+        petType: "Grass",
+        rarity: "Epic",
+        level: 36,
+        isShiny: false,
+      },
     },
     {
       name: "Gyarados",
@@ -185,163 +217,60 @@ export class SampleDataPopulator {
       evolutionStage: 2,
       evolutions: ["Magikarp"],
       isShiny: false,
-    },
-    {
-      name: "Lucario",
-      type: "FIGHTING",
-      rarity: "Legendary",
-      ability: "Steadfast",
-      technique: "Cosmic",
-      skin: "Mega Evolution",
-      stats: {
-        dmg: 110,
-        hp: 70,
-        range: 1,
-        spa: 0.8,
-        critChance: 0.2,
-        critDamage: 2.0,
-        moneyBonus: 0.1,
+      blockchainMetadata: {
+        petType: "Water",
+        rarity: "Rare",
+        level: 30,
+        isShiny: false,
       },
-      level: 42,
-      experience: 18500,
-      evolutionStage: 2,
-      evolutions: ["Riolu"],
-      isShiny: true,
-    },
-    {
-      name: "Greninja",
-      type: "WATER",
-      rarity: "Legendary",
-      ability: "Torrent",
-      technique: "Shinigami",
-      skin: "Ash-Greninja",
-      stats: {
-        dmg: 95,
-        hp: 72,
-        range: 1,
-        spa: 0.7,
-        critChance: 0.18,
-        critDamage: 1.9,
-        moneyBonus: 0.09,
-      },
-      level: 40,
-      experience: 16500,
-      evolutionStage: 3,
-      evolutions: ["Froakie", "Frogadier"],
-      isShiny: false,
-    },
-    {
-      name: "Eevee",
-      type: "NORMAL",
-      rarity: "Uncommon",
-      ability: "Adaptability",
-      technique: "Shining",
-      skin: null,
-      stats: {
-        dmg: 55,
-        hp: 55,
-        range: 1,
-        spa: 1.0,
-        critChance: 0.05,
-        critDamage: 1.3,
-        moneyBonus: 0.03,
-      },
-      level: 15,
-      experience: 2500,
-      evolutionStage: 1,
-      evolutions: [
-        "Vaporeon",
-        "Jolteon",
-        "Flareon",
-        "Espeon",
-        "Umbreon",
-        "Leafeon",
-        "Glaceon",
-        "Sylveon",
-      ],
-      isShiny: false,
-    },
-    {
-      name: "Dragonite",
-      type: "DRAGON",
-      rarity: "Mythic",
-      ability: "Inner Focus",
-      technique: "Demi God",
-      skin: null,
-      stats: {
-        dmg: 134,
-        hp: 91,
-        range: 2,
-        spa: 1.4,
-        critChance: 0.25,
-        critDamage: 2.2,
-        moneyBonus: 0.12,
-      },
-      level: 55,
-      experience: 28500,
-      evolutionStage: 3,
-      evolutions: ["Dratini", "Dragonair"],
-      isShiny: false,
-    },
-    {
-      name: "Mewtwo",
-      type: "PSYCHIC",
-      rarity: "Godly",
-      ability: "Pressure",
-      technique: "Overlord",
-      skin: "Armored Form",
-      stats: {
-        dmg: 110,
-        hp: 106,
-        range: 3,
-        spa: 0.6,
-        critChance: 0.3,
-        critDamage: 2.5,
-        moneyBonus: 0.15,
-      },
-      level: 70,
-      experience: 45000,
-      evolutionStage: 1,
-      evolutions: [],
-      isShiny: false,
     },
   ];
 
-  // Sample techniques data
+  // Sample techniques data matching blockchain structure
   sampleTechniques = [
     {
       name: "Thunderbolt Lv.2",
       rarity: "Rare",
       effect: "Electric damage +15%, chance to paralyze",
       type: "Technique",
+      level: 2,
+      // Blockchain metadata
+      blockchainMetadata: {
+        name: "Thunderbolt Lv.2",
+        effect: "Electric damage +15%, chance to paralyze",
+        level: 2,
+        rarity: "Rare",
+      },
     },
     {
       name: "Flamethrower Lv.3",
       rarity: "Epic",
       effect: "Fire damage +25%, chance to burn",
       type: "Technique",
+      level: 3,
+      blockchainMetadata: {
+        name: "Flamethrower Lv.3",
+        effect: "Fire damage +25%, chance to burn",
+        level: 3,
+        rarity: "Epic",
+      },
     },
     {
       name: "Hydro Pump Lv.1",
       rarity: "Uncommon",
       effect: "Water damage +20%, lower accuracy",
       type: "Technique",
-    },
-    {
-      name: "Solar Beam Lv.2",
-      rarity: "Rare",
-      effect: "Grass damage +30%, requires charge turn",
-      type: "Technique",
-    },
-    {
-      name: "Dragon Claw Lv.1",
-      rarity: "Uncommon",
-      effect: "Dragon damage +25%, high critical chance",
-      type: "Technique",
+      level: 1,
+      blockchainMetadata: {
+        name: "Hydro Pump Lv.1",
+        effect: "Water damage +20%, lower accuracy",
+        level: 1,
+        rarity: "Uncommon",
+      },
     },
   ];
 
-  // Sample skins data
+  // Sample skins data matching blockchain structure
   sampleSkins = [
     {
       name: "Shiny Variant",
@@ -349,6 +278,12 @@ export class SampleDataPopulator {
       rarity: "Rare",
       effect: "Changes appearance to shiny version",
       applicableTo: ["All Pets"],
+      // Blockchain metadata
+      blockchainMetadata: {
+        skinType: BLOCKCHAIN_SKIN_TYPES.CLASSIC_SKIN,
+        name: "Shiny Variant",
+        rarity: "Rare",
+      },
     },
     {
       name: "Mega Evolution",
@@ -356,6 +291,11 @@ export class SampleDataPopulator {
       rarity: "Epic",
       effect: "Temporarily evolves pet during battle",
       applicableTo: ["Charizard", "Lucario", "Mewtwo"],
+      blockchainMetadata: {
+        skinType: BLOCKCHAIN_SKIN_TYPES.EPIC_SKIN,
+        name: "Mega Evolution",
+        rarity: "Epic",
+      },
     },
     {
       name: "Armored Form",
@@ -363,19 +303,19 @@ export class SampleDataPopulator {
       rarity: "Legendary",
       effect: "Increases defense stats and changes appearance",
       applicableTo: ["Mewtwo"],
-    },
-    {
-      name: "Ash-Greninja",
-      type: "Battle",
-      rarity: "Mythic",
-      effect: "Transforms Greninja into special battle form",
-      applicableTo: ["Greninja"],
+      blockchainMetadata: {
+        skinType: BLOCKCHAIN_SKIN_TYPES.LEGENDARY_SKIN,
+        name: "Armored Form",
+        rarity: "Legendary",
+      },
     },
   ];
 
   async populateDatabase() {
     try {
-      console.log("🚀 Starting database population with Pet/Egg models...");
+      console.log(
+        "🚀 Starting database population with Pet/Egg models and Blockchain integration..."
+      );
 
       // Clear existing data
       await this.clearExistingData();
@@ -384,32 +324,30 @@ export class SampleDataPopulator {
       const createdUsers = await this.createUsers();
       console.log(`✅ Created ${createdUsers.length} users`);
 
-      // Create pets using your Pet model
+      // Create pets using your Pet model and mint blockchain NFTs
       const createdPets = await this.createPets(createdUsers);
       console.log(`✅ Created ${createdPets.length} pets`);
 
-      // Create eggs using your Egg model
+      // Create eggs using your Egg model and mint blockchain NFTs
       const createdEggs = await this.createEggs(createdUsers);
       console.log(`✅ Created ${createdEggs.length} eggs`);
 
-      // Create techniques
+      // Create techniques and mint blockchain NFTs
       const createdTechniques = await this.createTechniques(createdUsers);
       console.log(`✅ Created ${createdTechniques.length} techniques`);
 
-      // Create skins
+      // Create skins and mint blockchain NFTs
       const createdSkins = await this.createSkins(createdUsers);
       console.log(`✅ Created ${createdSkins.length} skins`);
 
       // Create marketplace listings
       const createdListings = await this.createListings(
         createdUsers,
-        createdPets
+        createdPets,
+        createdTechniques,
+        createdSkins
       );
       console.log(`✅ Created ${createdListings.length} marketplace listings`);
-
-      // Simulate blockchain NFTs
-      await this.createBlockchainNFTs(createdUsers, createdPets);
-      console.log("✅ Created blockchain NFT records");
 
       console.log("🎉 Database population completed successfully!");
       console.log("\n📊 Sample Data Summary:");
@@ -473,20 +411,46 @@ export class SampleDataPopulator {
       const userPets = this.samplePets.slice(startIdx, endIdx);
 
       for (const petData of userPets) {
-        // Create pet using your Pet model
-        const pet = new Pet({
-          ...petData,
-          ownerId: user._id || user.id,
-          currentHP: petData.stats.hp,
-          isAlive: true,
-          statusEffects: [],
-          title: null,
-        });
+        try {
+          // Create pet using your Pet model
+          const pet = new Pet({
+            ...petData,
+            ownerId: user._id || user.id,
+            currentHP: petData.stats.hp,
+            isAlive: true,
+            statusEffects: [],
+            title: null,
+            // Blockchain integration
+            tokenId: null, // Will be set after minting
+            nftContract: "PetNFT", // Reference to the contract
+            blockchainMetadata: petData.blockchainMetadata,
+          });
 
-        // Convert to plain object for database storage
-        const petObject = pet.toJSON();
-        const savedPet = await this.dbService.createPet(petObject);
-        createdPets.push(savedPet);
+          // Convert to plain object for database storage
+          const petObject = pet.toJSON();
+          const savedPet = await this.dbService.createPet(petObject);
+
+          // Mint blockchain NFT for the pet
+          if (user.walletAddress) {
+            const mintResult = await this.blockchainService.mintPetNFT(
+              user.walletAddress,
+              petData.blockchainMetadata
+            );
+
+            if (mintResult.success) {
+              // Update pet with blockchain token ID
+              await this.dbService.updatePet(savedPet._id || savedPet.id, {
+                tokenId: mintResult.tokenId,
+                nftContract: "PetNFT",
+              });
+              savedPet.tokenId = mintResult.tokenId;
+            }
+          }
+
+          createdPets.push(savedPet);
+        } catch (error) {
+          console.error(`Error creating pet ${petData.name}:`, error);
+        }
       }
     }
 
@@ -504,21 +468,51 @@ export class SampleDataPopulator {
       for (let i = 0; i < eggCount; i++) {
         const eggType = eggTypes[Math.floor(Math.random() * eggTypes.length)];
 
-        // Create egg using your Egg model
-        const egg = new Egg(eggType, user._id || user.id);
+        try {
+          // Create egg using your Egg model
+          const egg = new Egg(eggType, user._id || user.id);
 
-        // Convert to database format
-        const eggData = {
-          type: egg.type,
-          ownerId: egg.ownerId,
-          isHatched: egg.isHatched,
-          contents: egg.contents,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
+          // Convert to database format
+          const eggData = {
+            type: egg.type,
+            ownerId: egg.ownerId,
+            isHatched: egg.isHatched,
+            contents: egg.contents,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            // Blockchain integration
+            tokenId: null,
+            nftContract: "EggNFT",
+            blockchainMetadata: {
+              eggType: this.mapEggTypeToBlockchain(eggType),
+              amount: 1,
+            },
+          };
 
-        const savedEgg = await this.dbService.createEgg(eggData);
-        createdEggs.push(savedEgg);
+          const savedEgg = await this.dbService.createEgg(eggData);
+
+          // Mint blockchain NFT for the egg
+          if (user.walletAddress) {
+            const blockchainEggType = this.mapEggTypeToBlockchain(eggType);
+            const mintResult = await this.blockchainService.mintEggNFT(
+              user.walletAddress,
+              blockchainEggType,
+              1
+            );
+
+            if (mintResult.success) {
+              await this.dbService.updateEgg(savedEgg._id || savedEgg.id, {
+                tokenId: blockchainEggType, // For ERC1155, tokenId is the egg type
+                nftContract: "EggNFT",
+              });
+              savedEgg.tokenId = blockchainEggType;
+            }
+          }
+
+          createdEggs.push(savedEgg);
+        } catch (error) {
+          console.error(`Error creating egg for user ${user.username}:`, error);
+        }
       }
     }
 
@@ -533,28 +527,56 @@ export class SampleDataPopulator {
       const techCount = Math.floor(Math.random() * 2) + 1;
 
       for (let i = 0; i < techCount; i++) {
-        const techniqueData =
-          this.sampleTechniques[
-            Math.floor(Math.random() * this.sampleTechniques.length)
-          ];
-        const technique = {
-          ...techniqueData,
-          ownerId: user._id || user.id,
-          obtainedAt: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
+        try {
+          const techniqueData =
+            this.sampleTechniques[
+              Math.floor(Math.random() * this.sampleTechniques.length)
+            ];
 
-        // Save technique using mongoose model
-        const TechniqueModel = mongoose.models.Technique;
-        const savedTechnique = await new TechniqueModel(technique).save();
+          const technique = {
+            ...techniqueData,
+            ownerId: user._id || user.id,
+            obtainedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            // Blockchain integration
+            tokenId: null,
+            nftContract: "TechniqueNFT",
+            blockchainMetadata: techniqueData.blockchainMetadata,
+          };
 
-        // Add to user's techniques
-        await this.dbService.updateUser(user._id || user.id, {
-          $push: { techniqueIds: savedTechnique._id },
-        });
+          // Save technique using mongoose model
+          const TechniqueModel = mongoose.models.Technique;
+          const savedTechnique = await new TechniqueModel(technique).save();
 
-        createdTechniques.push(savedTechnique);
+          // Mint blockchain NFT for the technique
+          if (user.walletAddress) {
+            const mintResult = await this.blockchainService.mintTechniqueNFT(
+              user.walletAddress,
+              techniqueData.blockchainMetadata
+            );
+
+            if (mintResult.success) {
+              await TechniqueModel.findByIdAndUpdate(savedTechnique._id, {
+                tokenId: mintResult.tokenId,
+                nftContract: "TechniqueNFT",
+              });
+              savedTechnique.tokenId = mintResult.tokenId;
+            }
+          }
+
+          // Add to user's techniques
+          await this.dbService.updateUser(user._id || user.id, {
+            $push: { techniqueIds: savedTechnique._id },
+          });
+
+          createdTechniques.push(savedTechnique);
+        } catch (error) {
+          console.error(
+            `Error creating technique for user ${user.username}:`,
+            error
+          );
+        }
       }
     }
 
@@ -566,87 +588,231 @@ export class SampleDataPopulator {
 
     for (const user of users) {
       // Each user gets 1 skin
-      const skinData =
-        this.sampleSkins[Math.floor(Math.random() * this.sampleSkins.length)];
-      const skin = {
-        ...skinData,
-        ownerId: user._id || user.id,
-        obtainedAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      try {
+        const skinData =
+          this.sampleSkins[Math.floor(Math.random() * this.sampleSkins.length)];
 
-      // Save skin using mongoose model
-      const SkinModel = mongoose.models.Skin;
-      const savedSkin = await new SkinModel(skin).save();
+        const skin = {
+          ...skinData,
+          ownerId: user._id || user.id,
+          obtainedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          // Blockchain integration
+          tokenId: null,
+          nftContract: "SkinNFT",
+          blockchainMetadata: skinData.blockchainMetadata,
+        };
 
-      // Add to user's skins
-      await this.dbService.updateUser(user._id || user.id, {
-        $push: { skinIds: savedSkin._id },
-      });
+        // Save skin using mongoose model
+        const SkinModel = mongoose.models.Skin;
+        const savedSkin = await new SkinModel(skin).save();
 
-      createdSkins.push(savedSkin);
+        // Mint blockchain NFT for the skin
+        if (user.walletAddress) {
+          const mintResult = await this.blockchainService.mintSkinNFT(
+            user.walletAddress,
+            skinData.blockchainMetadata.skinType,
+            1,
+            skinData.blockchainMetadata.name
+          );
+
+          if (mintResult.success) {
+            await SkinModel.findByIdAndUpdate(savedSkin._id, {
+              tokenId: skinData.blockchainMetadata.skinType, // For ERC1155, tokenId is the skin type
+              nftContract: "SkinNFT",
+            });
+            savedSkin.tokenId = skinData.blockchainMetadata.skinType;
+          }
+        }
+
+        // Add to user's skins
+        await this.dbService.updateUser(user._id || user.id, {
+          $push: { skinIds: savedSkin._id },
+        });
+
+        createdSkins.push(savedSkin);
+      } catch (error) {
+        console.error(`Error creating skin for user ${user.username}:`, error);
+      }
     }
 
     return createdSkins;
   }
 
-  async createListings(users, pets) {
+  async createListings(users, pets, techniques, skins) {
     const createdListings = [];
 
-    // Create 3-5 marketplace listings from different users
-    const listingCount = Math.floor(Math.random() * 3) + 3;
+    // Create marketplace listings for different item types
+    const listingCount = Math.floor(Math.random() * 5) + 3;
 
     for (let i = 0; i < listingCount; i++) {
       const seller = users[Math.floor(Math.random() * users.length)];
-      const availablePets = pets.filter(
-        (p) =>
-          p.ownerId.toString() === (seller._id || seller.id).toString() &&
-          !p.isListed
-      );
 
-      if (availablePets.length > 0) {
-        const pet =
-          availablePets[Math.floor(Math.random() * availablePets.length)];
+      try {
+        let listingData;
+        const itemTypeChoice = Math.floor(Math.random() * 4); // 0-3 for different item types
 
-        const listing = await this.dbService.createListing({
-          sellerId: seller._id || seller.id,
-          itemId: pet._id || pet.id,
-          itemType: "Pet",
-          price: Math.floor(Math.random() * 500) + 100,
-          currency: "GEM",
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+        switch (itemTypeChoice) {
+          case 0: // Pet listing
+            const availablePets = pets.filter(
+              (p) =>
+                p.ownerId.toString() === (seller._id || seller.id).toString() &&
+                !p.isListed &&
+                p.tokenId
+            );
 
-        // Mark pet as listed
-        await this.dbService.updatePet(pet._id || pet.id, { isListed: true });
+            if (availablePets.length > 0) {
+              const pet =
+                availablePets[Math.floor(Math.random() * availablePets.length)];
 
-        createdListings.push(listing);
+              listingData = {
+                sellerId: seller._id || seller.id,
+                itemId: pet._id || pet.id,
+                itemType: "Pet",
+                price: Math.floor(Math.random() * 500) + 100,
+                currency: "GEM",
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                // Blockchain listing
+                blockchainListingId: null,
+                nftContract: "PetNFT",
+                tokenId: pet.tokenId,
+                amount: 1,
+              };
+
+              // Create blockchain listing
+              const blockchainResult = await this.blockchainService.listItem(
+                "PetNFT", // nftContract
+                ITEM_TYPES.PET, // itemType
+                pet.tokenId,
+                1, // amount
+                (listingData.price * 0.001).toFixed(4) // Convert gems to ETH equivalent
+              );
+
+              if (blockchainResult.success) {
+                listingData.blockchainListingId = blockchainResult.listingId;
+              }
+            }
+            break;
+
+          case 1: // Technique listing
+            const userTechniques = techniques.filter(
+              (t) =>
+                t.ownerId.toString() === (seller._id || seller.id).toString() &&
+                t.tokenId
+            );
+
+            if (userTechniques.length > 0) {
+              const technique =
+                userTechniques[
+                  Math.floor(Math.random() * userTechniques.length)
+                ];
+
+              listingData = {
+                sellerId: seller._id || seller.id,
+                itemId: technique._id || technique.id,
+                itemType: "Technique",
+                price: Math.floor(Math.random() * 200) + 50,
+                currency: "GEM",
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                // Blockchain listing
+                blockchainListingId: null,
+                nftContract: "TechniqueNFT",
+                tokenId: technique.tokenId,
+                amount: 1,
+              };
+
+              const blockchainResult = await this.blockchainService.listItem(
+                "TechniqueNFT",
+                ITEM_TYPES.TECHNIQUE,
+                technique.tokenId,
+                1,
+                (listingData.price * 0.001).toFixed(4)
+              );
+
+              if (blockchainResult.success) {
+                listingData.blockchainListingId = blockchainResult.listingId;
+              }
+            }
+            break;
+
+          case 2: // Skin listing
+            const userSkins = skins.filter(
+              (s) =>
+                s.ownerId.toString() === (seller._id || seller.id).toString() &&
+                s.tokenId
+            );
+
+            if (userSkins.length > 0) {
+              const skin =
+                userSkins[Math.floor(Math.random() * userSkins.length)];
+
+              listingData = {
+                sellerId: seller._id || seller.id,
+                itemId: skin._id || skin.id,
+                itemType: "Skin",
+                price: Math.floor(Math.random() * 300) + 75,
+                currency: "GEM",
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                // Blockchain listing
+                blockchainListingId: null,
+                nftContract: "SkinNFT",
+                tokenId: skin.tokenId,
+                amount: 1,
+              };
+
+              const blockchainResult = await this.blockchainService.listItem(
+                "SkinNFT",
+                ITEM_TYPES.SKIN,
+                skin.tokenId,
+                1,
+                (listingData.price * 0.001).toFixed(4)
+              );
+
+              if (blockchainResult.success) {
+                listingData.blockchainListingId = blockchainResult.listingId;
+              }
+            }
+            break;
+        }
+
+        if (listingData) {
+          const listing = await this.dbService.createListing(listingData);
+
+          // Mark item as listed
+          if (listingData.itemType === "Pet") {
+            await this.dbService.updatePet(listingData.itemId, {
+              isListed: true,
+            });
+          }
+
+          createdListings.push(listing);
+        }
+      } catch (error) {
+        console.error(
+          `Error creating listing for user ${seller.username}:`,
+          error
+        );
       }
     }
 
     return createdListings;
   }
 
-  async createBlockchainNFTs(users, pets) {
-    // Create blockchain NFT records for some pets
-    for (const pet of pets.slice(0, 5)) {
-      // First 5 pets get blockchain NFTs
-      const owner = users.find(
-        (u) => (u._id || u.id).toString() === pet.ownerId.toString()
-      );
-      if (owner) {
-        await this.blockchainService.mintNFT(owner.walletAddress, "Pet", {
-          name: pet.name,
-          species: pet.type,
-          rarity: pet.rarity,
-          level: pet.level,
-          tokenId: pet._id || pet.id,
-        });
-      }
-    }
+  // Helper method to map app egg types to blockchain egg types
+  mapEggTypeToBlockchain(appEggType) {
+    const mapping = {
+      [EGG_TYPES.BASIC]: BLOCKCHAIN_EGG_TYPES.BASIC_EGG,
+      [EGG_TYPES.COSMETIC]: BLOCKCHAIN_EGG_TYPES.COSMETIC_EGG,
+      [EGG_TYPES.ATTRIBUTE]: BLOCKCHAIN_EGG_TYPES.ATTRIBUTE_EGG,
+    };
+    return mapping[appEggType] || BLOCKCHAIN_EGG_TYPES.BASIC_EGG;
   }
 
   // Utility to hatch some eggs for demo
@@ -690,7 +856,15 @@ export class SampleDataPopulator {
             });
           }
 
-          // Remove hatched egg
+          // Remove hatched egg and burn blockchain NFT
+          if (egg.tokenId) {
+            await this.blockchainService.burnEggNFT(
+              user.walletAddress,
+              egg.tokenId,
+              1
+            );
+          }
+
           await mongoose.models.Egg.findByIdAndDelete(egg._id);
         } catch (error) {
           console.log(
@@ -713,7 +887,12 @@ export class SampleDataPopulator {
     );
     console.log(`   🎨 Skins: ${this.sampleSkins.length} cosmetic skins`);
     console.log(`   🎯 Rarities: ${PET_RARITIES.length} pet rarities`);
-    console.log(`   🌈 Types: ${Object.keys(TYPES).length} elemental types`);
+    console.log(
+      `   🌈 Types: ${Object.keys(PET_TYPES).length} elemental types`
+    );
+    console.log(
+      `   ⛓️  Blockchain Integration: Full NFT minting & marketplace`
+    );
   }
 }
 

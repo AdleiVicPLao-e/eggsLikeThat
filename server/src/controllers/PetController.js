@@ -1,5 +1,5 @@
-import Pet from "../models/Pet.js";
-import User from "../models/User.js";
+import { Pet } from "../models/Pet.js";
+import { User } from "../models/User.js";
 import { serverRNGService } from "../services/RNGService.js";
 import logger from "../utils/logger.js";
 

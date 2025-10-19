@@ -1,16 +1,37 @@
 // client/src/hooks/useWallet.jsx
 import { useState, useEffect } from "react";
-import { gameAPI } from "../services/api.js";
+import { gameAPI } from "../services/api";
+import { useBlockchain } from "./useBlockchain";
 
 export const useWallet = () => {
-  const [account, setAccount] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
 
-  // Check if wallet is connected on mount
+  // Use blockchain hook for wallet connection and contract interactions
+  const {
+    account,
+    isConnected,
+    isLoading: blockchainLoading,
+    error: blockchainError,
+    connectWallet,
+    switchNetwork,
+    getContract,
+    provider,
+    signer,
+    clearError: clearBlockchainError,
+  } = useBlockchain();
+
+  // Sync errors between hooks
   useEffect(() => {
-    checkConnection();
+    if (blockchainError) {
+      setError(blockchainError);
+    }
+  }, [blockchainError]);
+
+  // Check if user is already logged in on mount
+  useEffect(() => {
+    checkExistingSession();
 
     // Listen for account changes
     if (window.ethereum) {
@@ -29,24 +50,6 @@ export const useWallet = () => {
     };
   }, []);
 
-  const checkConnection = async () => {
-    try {
-      if (window.ethereum) {
-        const accounts = await window.ethereum.request({
-          method: "eth_accounts",
-        });
-
-        if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          // Check if user is already logged in with this wallet
-          await checkExistingSession();
-        }
-      }
-    } catch (error) {
-      console.error("Error checking wallet connection:", error);
-    }
-  };
-
   const checkExistingSession = async () => {
     try {
       const token = localStorage.getItem("petverse_token");
@@ -64,31 +67,27 @@ export const useWallet = () => {
   const connect = async () => {
     setIsConnecting(true);
     setError(null);
+    clearBlockchainError();
 
     try {
       if (!window.ethereum) {
         throw new Error("MetaMask is not installed");
       }
 
-      // Request account access
-      const accounts = await window.ethereum.request({
-        method: "eth_requestAccounts",
-      });
+      // Use blockchain hook's connect function
+      const connected = await connectWallet();
 
-      if (accounts.length === 0) {
-        throw new Error("No accounts found");
+      if (!connected) {
+        throw new Error("Failed to connect wallet");
       }
 
-      const address = accounts[0];
-      setAccount(address);
-
       // Sign message to verify ownership
-      const message = `Welcome to PetVerse! Please sign this message to verify your wallet ownership. Address: ${address}`;
+      const message = `Welcome to PetVerse! Please sign this message to verify your wallet ownership. Address: ${account}`;
       const signature = await signMessage(message);
 
       return {
         success: true,
-        address,
+        address: account,
         signature,
         message,
       };
@@ -237,20 +236,21 @@ export const useWallet = () => {
   };
 
   const disconnect = () => {
-    setAccount(null);
     setError(null);
     setUserProfile(null);
+    clearBlockchainError();
     localStorage.removeItem("petverse_token");
     localStorage.removeItem("petverse_user");
+    // Note: We don't disconnect the wallet from blockchain here
+    // as users might want to stay connected to the blockchain but logged out of the app
   };
 
   const handleAccountsChanged = (accounts) => {
     if (accounts.length === 0) {
-      // User disconnected wallet
+      // User disconnected wallet from MetaMask
       disconnect();
     } else {
-      setAccount(accounts[0]);
-      // Check if the new account has an existing session
+      // Account changed - check if the new account has an existing session
       checkExistingSession();
     }
   };
@@ -261,28 +261,23 @@ export const useWallet = () => {
   };
 
   const signMessage = async (message) => {
-    if (!account) {
+    if (!account || !signer) {
       throw new Error("No account connected");
     }
 
     try {
-      const signature = await window.ethereum.request({
-        method: "personal_sign",
-        params: [message, account],
-      });
+      // Use the signer from useBlockchain hook
+      const signature = await signer.signMessage(message);
       return signature;
     } catch (error) {
       throw new Error(`Failed to sign message: ${error.message}`);
     }
   };
 
-  const switchNetwork = async (chainId = "0x1") => {
+  const switchToNetwork = async (chainId = "0x1") => {
     try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: chainId }],
-      });
-      return { success: true };
+      const success = await switchNetwork(parseInt(chainId, 16));
+      return { success };
     } catch (error) {
       setError(`Failed to switch network: ${error.message}`);
       return {
@@ -294,18 +289,15 @@ export const useWallet = () => {
 
   const getWalletBalance = async () => {
     try {
-      if (!account) {
+      if (!account || !provider) {
         throw new Error("No account connected");
       }
 
-      const balance = await window.ethereum.request({
-        method: "eth_getBalance",
-        params: [account, "latest"],
-      });
+      const balance = await provider.getBalance(account);
 
       return {
         success: true,
-        balance: parseInt(balance, 16) / 1e18, // Convert from wei to ETH
+        balance: ethers.utils.formatEther(balance), // Convert from wei to ETH
       };
     } catch (error) {
       return {
@@ -315,12 +307,134 @@ export const useWallet = () => {
     }
   };
 
+  // Enhanced methods using blockchain hook
+  const getUserNFTs = async () => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
+
+      // Use blockchain hook methods
+      const pets = await getUserPets();
+      const eggs = await getUserEggs();
+
+      return {
+        success: true,
+        pets,
+        eggs,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  const listNFTOnMarketplace = async (nftType, tokenId, amount, price) => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
+
+      // Map nftType to contract address and item type
+      const nftContracts = {
+        pet: process.env.REACT_APP_PET_NFT_CONTRACT,
+        egg: process.env.REACT_APP_EGG_NFT_CONTRACT,
+        skin: process.env.REACT_APP_SKIN_NFT_CONTRACT,
+        technique: process.env.REACT_APP_TECHNIQUE_NFT_CONTRACT,
+      };
+
+      const itemTypes = {
+        pet: 0, // PET
+        egg: 1, // EGG
+        skin: 2, // SKIN
+        technique: 3, // TECHNIQUE
+      };
+
+      const nftContract = nftContracts[nftType];
+      const itemType = itemTypes[nftType];
+
+      if (!nftContract || itemType === undefined) {
+        throw new Error(`Invalid NFT type: ${nftType}`);
+      }
+
+      const receipt = await listItem(
+        nftContract,
+        itemType,
+        tokenId,
+        amount,
+        price
+      );
+
+      return {
+        success: true,
+        receipt,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  const buyNFTFromMarketplace = async (listingId, price) => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
+
+      const receipt = await buyItem(listingId, price);
+
+      return {
+        success: true,
+        receipt,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  const levelUpUserPet = async (tokenId) => {
+    try {
+      if (!account) {
+        throw new Error("No wallet connected");
+      }
+
+      const receipt = await levelUpPet(tokenId);
+
+      return {
+        success: true,
+        receipt,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  };
+
+  const clearError = () => {
+    setError(null);
+    clearBlockchainError();
+  };
+
   return {
-    // State
+    // State (from useBlockchain)
     account,
-    isConnecting,
+    isConnected,
+    isLoading: isConnecting || blockchainLoading,
     error,
     userProfile,
+
+    // Blockchain state (exposed for convenience)
+    provider,
+    signer,
 
     // Connection methods
     connect,
@@ -333,12 +447,23 @@ export const useWallet = () => {
 
     // Utility methods
     signMessage,
-    switchNetwork,
+    switchNetwork: switchToNetwork,
     getWalletBalance,
 
+    // Enhanced NFT methods (using useBlockchain)
+    getUserNFTs,
+    listNFTOnMarketplace,
+    buyNFTFromMarketplace,
+    levelUpUserPet,
+
     // Status
-    isConnected: !!account,
     isMetaMaskInstalled: !!window.ethereum,
     isLoggedIn: !!userProfile && !!localStorage.getItem("petverse_token"),
+
+    // Error handling
+    clearError,
   };
 };
+
+// Re-export useBlockchain for components that need direct blockchain access
+export { useBlockchain };

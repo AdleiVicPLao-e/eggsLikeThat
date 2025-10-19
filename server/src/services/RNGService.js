@@ -3,44 +3,48 @@ import {
   SKIN_RARITIES,
   TECHNIQUES,
   PET_TYPES,
-  RARITIES,
+  PET_RARITIES,
 } from "../utils/constants.js";
-import { weightedRandom, generateRandomPet } from "../utils/rng.js";
-import { Pet } from "./Pet.js";
-import { Egg } from "./Egg.js";
+import {
+  weightedRandom,
+  generateRandomPet,
+  generateBaseStats,
+} from "../utils/rng.js";
+import { Pet } from "../models/Pet.js";
+import { Egg } from "../models/Egg.js";
 
 export class RNGService {
   constructor() {
     this.pityCounters = new Map(); // Track pity counters per user
   }
 
-  // Generate pet with MongoDB-compatible data
+  // Generate pet with MongoDB-compatible data - FIXED to use Pet class
   generatePetForDB(ownerId, pityCounter = 0) {
-    const petData = this.generatePet(pityCounter);
+    const pet = this.generatePet(ownerId, pityCounter);
 
     return {
-      ...petData,
-      owner: ownerId,
+      ...pet.toJSON(),
       hatchDate: new Date(),
       isFavorite: false,
       battlesWon: 0,
       battlesLost: 0,
-      experience: 0,
-      level: 1,
     };
   }
 
-  // Generate egg with MongoDB-compatible data
-  generateEggForDB(ownerId, eggType = "BASIC") {
-    const eggData = this.generateEggData(eggType);
+  // Generate egg with MongoDB-compatible data - FIXED to use Egg class properly
+  generateEggForDB(ownerId, eggType = EGG_TYPES.BASIC) {
+    // Create an Egg instance
+    const egg = new Egg(eggType, ownerId);
 
     return {
-      ...eggData,
-      owner: ownerId,
+      id: crypto.randomUUID(),
+      type: eggType,
+      ownerId: ownerId,
       isHatched: false,
-      purchased: false,
-      purchasePrice: 0,
-      currency: "coins",
+      hatchDuration: this.getHatchDuration(eggType),
+      cost: this.getEggCost(eggType),
+      description: this.getEggDescription(eggType),
+      createdAt: new Date(),
     };
   }
 
@@ -60,45 +64,34 @@ export class RNGService {
     };
   }
 
-  // Get egg drop rates for catalog display
+  // Get egg drop rates for catalog display - FIXED to use actual constants
   getEggDropRates(eggType) {
     const dropRates = {
-      BASIC: {
-        common: "50%",
-        uncommon: "30%",
-        rare: "15%",
-        epic: "4%",
-        legendary: "1%",
+      [EGG_TYPES.BASIC]: {
+        description: "Contains random pets of various rarities",
+        rarities: PET_RARITIES,
       },
-      PREMIUM: {
-        common: "30%",
-        uncommon: "40%",
-        rare: "20%",
-        epic: "8%",
-        legendary: "2%",
+      [EGG_TYPES.COSMETIC]: {
+        description: "Contains cosmetic skins",
+        rarities: SKIN_RARITIES,
       },
-      COSMETIC: {
-        common_skin: "60%",
-        rare_skin: "30%",
-        epic_animation: "8%",
-        legendary_effect: "2%",
-      },
-      MYSTERY: {
-        random: "100%",
+      [EGG_TYPES.ATTRIBUTE]: {
+        description: "Contains powerful techniques",
+        techniques: TECHNIQUES,
       },
     };
 
-    return dropRates[eggType] || dropRates.BASIC;
+    return dropRates[eggType] || dropRates[EGG_TYPES.BASIC];
   }
 
-  // Get random pet type for preview
+  // Get random pet type for preview - FIXED to use imported PET_TYPES
   getRandomPetType() {
-    const petTypes = Object.values(PET_TYPES);
+    const petTypes = Object.keys(PET_TYPES);
     return petTypes[Math.floor(Math.random() * petTypes.length)];
   }
 
-  // Generate a pet with pity system
-  generatePet(pityCounter = 0) {
+  // Generate a pet with pity system - FIXED to use Pet class constructor
+  generatePet(ownerId = null, pityCounter = 0) {
     // Increase rare drop chance based on pity counter
     const pityBonus = Math.min(pityCounter * 0.01, 0.1); // Max 10% bonus
     const rarity = this.calculateRarityWithPity(pityBonus);
@@ -106,30 +99,24 @@ export class RNGService {
     const petType = this.getRandomPetType();
     const isShiny = Math.random() < 0.01; // 1% shiny chance
 
-    return {
-      id: crypto.randomUUID(),
+    // Use the imported generateRandomPet function for base data
+    const basePetData = generateRandomPet(ownerId);
+
+    // Create a proper Pet instance using the class constructor
+    const pet = new Pet({
+      ownerId: ownerId,
       name: this.generatePetName(petType, rarity),
       type: petType,
       rarity: rarity,
-      ability: this.generateRandomAbility(),
+      ability: basePetData.ability,
       technique: null,
       skin: null,
-      stats: this.generateBaseStats(rarity, petType),
+      stats: generateBaseStats(rarity),
       isShiny: isShiny,
       title: isShiny ? "Shiny" : null,
-    };
-  }
+    });
 
-  // Generate egg data
-  generateEggData(eggType = EGG_TYPES.BASIC) {
-    return {
-      id: crypto.randomUUID(),
-      type: eggType,
-      rarity: this.getEggRarity(eggType),
-      hatchDuration: this.getHatchDuration(eggType),
-      cost: this.getEggCost(eggType),
-      description: this.getEggDescription(eggType),
-    };
+    return pet;
   }
 
   // Calculate battle rewards
@@ -198,32 +185,26 @@ export class RNGService {
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  // Helper methods for pet generation
+  // Helper methods for pet generation - FIXED to use imported PET_RARITIES
   calculateRarityWithPity(pityBonus = 0) {
-    const baseRates = {
-      common: 50,
-      uncommon: 30,
-      rare: 15,
-      epic: 4,
-      legendary: 1,
-    };
+    // Create adjusted rates with pity bonus
+    const adjustedRarities = PET_RARITIES.map((rarity) => {
+      let adjustedChance = rarity.chance;
 
-    // Adjust rates with pity bonus
-    const adjustedRates = { ...baseRates };
-    adjustedRates.legendary += pityBonus * 100;
-    adjustedRates.epic += pityBonus * 50;
+      // Apply pity bonus to higher rarities
+      if (rarity.name === "Godly" || rarity.name === "Ultimate") {
+        adjustedChance += pityBonus * 100;
+      } else if (rarity.name === "Exotic" || rarity.name === "Celestial") {
+        adjustedChance += pityBonus * 50;
+      }
 
-    // Normalize rates
-    const total = Object.values(adjustedRates).reduce(
-      (sum, rate) => sum + rate,
-      0
-    );
-    const normalizedRates = Object.keys(adjustedRates).map((rarity) => ({
-      name: rarity,
-      chance: (adjustedRates[rarity] / total) * 100,
-    }));
+      return {
+        name: rarity.name,
+        chance: Math.max(0.1, adjustedChance), // Ensure minimum chance
+      };
+    });
 
-    return weightedRandom(normalizedRates).name;
+    return weightedRandom(adjustedRarities).name;
   }
 
   generatePetName(petType, rarity) {
@@ -233,6 +214,11 @@ export class RNGService {
       rare: ["Mystic", "Royal", "Ancient"],
       epic: ["Divine", "Celestial", "Eternal"],
       legendary: ["Omega", "Alpha", "Ultimate"],
+      mythic: ["Mythic", "Ancient", "Primeval"],
+      celestial: ["Celestial", "Stellar", "Cosmic"],
+      exotic: ["Exotic", "Unique", "Rare"],
+      ultimate: ["Ultimate", "Supreme", "Perfect"],
+      godly: ["Divine", "Godly", "Omnipotent"],
     };
 
     const names = {
@@ -243,7 +229,7 @@ export class RNGService {
       KRAKEN: ["Deep", "Wave", "Tide"],
     };
 
-    const prefixPool = prefixes[rarity] || prefixes.common;
+    const prefixPool = prefixes[rarity.toLowerCase()] || prefixes.common;
     const namePool = names[petType] || ["Friend", "Companion", "Buddy"];
 
     const prefix = prefixPool[Math.floor(Math.random() * prefixPool.length)];
@@ -252,68 +238,11 @@ export class RNGService {
     return `${prefix} ${name}`;
   }
 
-  generateRandomAbility() {
-    const abilities = [
-      { name: "Fire Breath", type: "offensive", power: 15 },
-      { name: "Healing Aura", type: "support", power: 10 },
-      { name: "Electric Shock", type: "offensive", power: 12 },
-      { name: "Protective Shield", type: "defensive", power: 8 },
-      { name: "Speed Boost", type: "utility", power: 5 },
-    ];
-
-    return abilities[Math.floor(Math.random() * abilities.length)];
-  }
-
-  generateBaseStats(rarity, petType) {
-    const rarityMultipliers = {
-      common: 1.0,
-      uncommon: 1.2,
-      rare: 1.5,
-      epic: 2.0,
-      legendary: 3.0,
-    };
-
-    const typeBonuses = {
-      DRAGON: { dmg: 5, hp: 3 },
-      PHOENIX: { dmg: 4, hp: 4 },
-      UNICORN: { dmg: 3, hp: 5 },
-      GRIFFIN: { dmg: 4, hp: 4 },
-      KRAKEN: { dmg: 5, hp: 3 },
-    };
-
-    const multiplier = rarityMultipliers[rarity] || 1.0;
-    const bonus = typeBonuses[petType] || { dmg: 0, hp: 0 };
-
-    return {
-      dmg: Math.round((10 + bonus.dmg) * multiplier),
-      hp: Math.round((50 + bonus.hp) * multiplier),
-      range: 1,
-      spa: +(1.0 * (1 - (multiplier - 1) * 0.1)).toFixed(2), // SPA decreases with rarity
-      critChance: Math.min(0.1 * multiplier, 0.3),
-      critDamage: Math.min(0.5 * multiplier, 2.0),
-      moneyBonus: Math.min(0.05 * multiplier, 0.15),
-    };
-  }
-
-  getEggRarity(eggType) {
-    const eggRarities = {
-      [EGG_TYPES.BASIC]: "common",
-      [EGG_TYPES.PREMIUM]: "rare",
-      [EGG_TYPES.COSMETIC]: "uncommon",
-      [EGG_TYPES.ATTRIBUTE]: "epic",
-      [EGG_TYPES.MYSTERY]: "special",
-    };
-
-    return eggRarities[eggType] || "common";
-  }
-
   getHatchDuration(eggType) {
     const durations = {
       [EGG_TYPES.BASIC]: 60, // 1 minute
-      [EGG_TYPES.PREMIUM]: 300, // 5 minutes
       [EGG_TYPES.COSMETIC]: 180, // 3 minutes
       [EGG_TYPES.ATTRIBUTE]: 600, // 10 minutes
-      [EGG_TYPES.MYSTERY]: 240, // 4 minutes
     };
 
     return durations[eggType] || 60;
@@ -322,10 +251,8 @@ export class RNGService {
   getEggCost(eggType) {
     const costs = {
       [EGG_TYPES.BASIC]: 100,
-      [EGG_TYPES.PREMIUM]: 500,
       [EGG_TYPES.COSMETIC]: 250,
       [EGG_TYPES.ATTRIBUTE]: 750,
-      [EGG_TYPES.MYSTERY]: 350,
     };
 
     return costs[eggType] || 100;
@@ -334,10 +261,8 @@ export class RNGService {
   getEggDescription(eggType) {
     const descriptions = {
       [EGG_TYPES.BASIC]: "A basic egg containing common pets",
-      [EGG_TYPES.PREMIUM]: "A premium egg with better rarity chances",
       [EGG_TYPES.COSMETIC]: "Contains cosmetic items and skins",
       [EGG_TYPES.ATTRIBUTE]: "Grants powerful techniques and abilities",
-      [EGG_TYPES.MYSTERY]: "A mysterious egg with random contents",
     };
 
     return descriptions[eggType] || "An unknown egg";
@@ -357,6 +282,23 @@ export class RNGService {
   resetUserPityCounter(userId) {
     this.pityCounters.set(userId, 0);
   }
+
+  // Helper method to hatch an egg - FIXED to return proper Pet instance
+  hatchEgg(egg) {
+    if (!(egg instanceof Egg)) {
+      throw new Error("Provided object is not an Egg instance");
+    }
+
+    const result = egg.hatch();
+
+    // If the result is a pet, ensure it's a proper Pet instance
+    if (result instanceof Pet) {
+      return result;
+    }
+
+    // For cosmetic and technique eggs, return the result as-is
+    return result;
+  }
 }
 
 // Server-specific extensions
@@ -374,14 +316,13 @@ class ServerRNGService extends RNGService {
     };
   }
 
-  generateEggForDB(ownerId, eggType = "BASIC") {
+  generateEggForDB(ownerId, eggType = EGG_TYPES.BASIC) {
     const eggData = super.generateEggForDB(ownerId, eggType);
 
     // Add server-specific fields
     return {
       ...eggData,
       serverId: process.env.SERVER_ID || "default",
-      createdAt: new Date(),
       expiresAt: this.calculateExpirationDate(eggType),
     };
   }
@@ -389,10 +330,8 @@ class ServerRNGService extends RNGService {
   calculateExpirationDate(eggType) {
     const expirationDays = {
       [EGG_TYPES.BASIC]: 30,
-      [EGG_TYPES.PREMIUM]: 60,
       [EGG_TYPES.COSMETIC]: 90,
       [EGG_TYPES.ATTRIBUTE]: 45,
-      [EGG_TYPES.MYSTERY]: 30,
     };
 
     const days = expirationDays[eggType] || 30;

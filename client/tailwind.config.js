@@ -10,6 +10,11 @@ export default {
           rare: "#3B82F6",
           epic: "#8B5CF6",
           legendary: "#F59E0B",
+          mythic: "#EC4899",
+          celestial: "#06B6D4",
+          exotic: "#84CC16",
+          ultimate: "#DC2626",
+          godly: "#FBBF24",
         },
       },
       animation: {

@@ -1,14 +1,237 @@
-import User from "../models/User.js";
-import {
-  generateToken,
-  verifyWalletSignature,
-  generateNonce,
-} from "../utils/cryptoUtils.js";
+import { User } from "../models/User.js";
 import { mailService } from "../services/MailService.js";
 import logger from "../utils/logger.js";
+import jwt from "jsonwebtoken";
+import { config } from "../config/env.js";
+
+// Helper functions
+const generateToken = (payload, expiresIn = "7d") => {
+  return jwt.sign(payload, config.JWT_SECRET, { expiresIn });
+};
+
+const generateNonce = () => {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
+
+const verifyWalletSignature = (walletAddress, message, signature) => {
+  // In a real implementation, you would verify the signature
+  // using ethers.js or web3.js
+  // For now, we'll return true for demo purposes
+  return true;
+};
 
 export const AuthController = {
-  // Register new user (wallet-based)
+  // Traditional email/password login
+  async login(req, res) {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and password are required",
+        });
+      }
+
+      // Find user by email
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid email or password",
+        });
+      }
+
+      // Verify password
+      const isPasswordValid = await user.verifyPassword(password);
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid email or password",
+        });
+      }
+
+      // Generate JWT token
+      const token = generateToken({
+        userId: user._id,
+        email: user.email,
+      });
+
+      // Update last login
+      user.lastLogin = new Date();
+      await user.save();
+
+      logger.info(`User logged in via email: ${user.email}`);
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        data: {
+          user: {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            walletAddress: user.walletAddress,
+            level: user.level,
+            coins: user.balance,
+            freeRolls: user.freeRolls || 0,
+            experience: user.experience,
+          },
+          token,
+        },
+      });
+    } catch (error) {
+      logger.error("Login error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during login",
+      });
+    }
+  },
+
+  // Traditional email/password registration
+  async walletRegister(req, res) {
+    try {
+      const { username, email, password } = req.body;
+
+      if (!username || !email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Username, email, and password are required",
+        });
+      }
+
+      // Check if user already exists
+      const existingUser = await User.findOne({
+        $or: [
+          { email: email.toLowerCase() },
+          { username: username.toLowerCase() },
+        ],
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message:
+            existingUser.email === email.toLowerCase()
+              ? "Email already registered"
+              : "Username already taken",
+        });
+      }
+
+      // Create new user with wallet
+      const user = await User.createWithWallet(username, email, password);
+      await user.save();
+
+      // Generate JWT token
+      const token = generateToken({
+        userId: user._id,
+        email: user.email,
+      });
+
+      // Send welcome email
+      if (email) {
+        await mailService.sendWelcomeEmail(user);
+      }
+
+      logger.info(`New user registered with wallet: ${username} (${email})`);
+
+      res.status(201).json({
+        success: true,
+        message: "User registered successfully",
+        data: {
+          user: {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            walletAddress: user.walletAddress,
+            level: user.level,
+            coins: user.balance,
+            freeRolls: user.freeRolls || 0,
+          },
+          token,
+        },
+      });
+    } catch (error) {
+      logger.error("Wallet registration error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during registration",
+      });
+    }
+  },
+
+  // Connect existing wallet to user account
+  async connectWallet(req, res) {
+    try {
+      const { walletAddress, signature } = req.body;
+      const user = req.user;
+
+      if (!walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address is required",
+        });
+      }
+
+      // Check if wallet is already connected to another account
+      const existingUser = await User.findOne({
+        walletAddress: walletAddress.toLowerCase(),
+      });
+
+      if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address already connected to another account",
+        });
+      }
+
+      // Verify signature if provided
+      if (signature) {
+        const message = `Connect wallet to PetVerse - Nonce: ${generateNonce()}`;
+        const isValid = verifyWalletSignature(
+          walletAddress,
+          message,
+          signature
+        );
+
+        if (!isValid) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid signature",
+          });
+        }
+      }
+
+      // Update user's wallet address
+      user.walletAddress = walletAddress.toLowerCase();
+      await user.save();
+
+      logger.info(
+        `Wallet connected for user: ${user.username} (${walletAddress})`
+      );
+
+      res.json({
+        success: true,
+        message: "Wallet connected successfully",
+        data: {
+          user: {
+            id: user._id,
+            username: user.username,
+            walletAddress: user.walletAddress,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Connect wallet error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during wallet connection",
+      });
+    }
+  },
+
+  // Register new user (wallet-based) - existing method
   async register(req, res) {
     try {
       const { walletAddress, username, email } = req.body;
@@ -34,7 +257,7 @@ export const AuthController = {
         username,
         email,
         // Free starting resources
-        coins: 1000,
+        balance: 1000,
         freeRolls: 3,
       });
 
@@ -62,7 +285,7 @@ export const AuthController = {
             username: user.username,
             walletAddress: user.walletAddress,
             level: user.level,
-            coins: user.coins,
+            coins: user.balance,
             freeRolls: user.freeRolls,
           },
           token,
@@ -77,13 +300,15 @@ export const AuthController = {
     }
   },
 
-  // Wallet login
+  // Wallet login - existing method
   async walletLogin(req, res) {
     try {
       const { walletAddress, signature } = req.body;
 
       // Find user by wallet address
-      const user = await User.findByWallet(walletAddress);
+      const user = await User.findOne({
+        walletAddress: walletAddress.toLowerCase(),
+      });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -92,7 +317,6 @@ export const AuthController = {
       }
 
       // In a real implementation, verify the signature against a nonce
-      // For now, we'll trust the wallet connection
       if (signature) {
         const message = `Login to PetVerse - Nonce: ${generateNonce()}`;
         const isValid = verifyWalletSignature(
@@ -115,7 +339,7 @@ export const AuthController = {
         walletAddress: user.walletAddress,
       });
 
-      // Update last login (you might want to add this field to User model)
+      // Update last login
       user.lastLogin = new Date();
       await user.save();
 
@@ -130,7 +354,7 @@ export const AuthController = {
             username: user.username,
             walletAddress: user.walletAddress,
             level: user.level,
-            coins: user.coins,
+            coins: user.balance,
             freeRolls: user.freeRolls,
             experience: user.experience,
           },
@@ -146,7 +370,7 @@ export const AuthController = {
     }
   },
 
-  // Guest login (no wallet required)
+  // Guest login - existing method (updated for consistency)
   async guestLogin(req, res) {
     try {
       const { username } = req.body;
@@ -170,7 +394,7 @@ export const AuthController = {
         walletAddress: tempWallet,
         username,
         isGuest: true,
-        coins: 500, // Less coins for guest users
+        balance: 500, // Less coins for guest users
         freeRolls: 1,
       });
 
@@ -197,7 +421,7 @@ export const AuthController = {
             username: user.username,
             isGuest: true,
             level: user.level,
-            coins: user.coins,
+            coins: user.balance,
             freeRolls: user.freeRolls,
           },
           token,
@@ -212,13 +436,13 @@ export const AuthController = {
     }
   },
 
-  // Get user profile
+  // Get user profile - existing method (updated for consistency)
   async getProfile(req, res) {
     try {
       const user = await User.findById(req.user._id)
-        .select("-__v")
-        .populate("ownedPets", "name tier type level stats")
-        .populate("ownedEggs", "eggType rarity isHatched");
+        .select("-__v -passwordHash")
+        .populate("pets", "name tier type level stats")
+        .populate("eggs", "eggType rarity isHatched");
 
       if (!user) {
         return res.status(404).json({
@@ -237,15 +461,15 @@ export const AuthController = {
             email: user.email,
             level: user.level,
             experience: user.experience,
-            coins: user.coins,
+            coins: user.balance,
             freeRolls: user.freeRolls,
             battlesWon: user.battlesWon,
             battlesLost: user.battlesLost,
             petsHatched: user.petsHatched,
             totalBattles: user.totalBattles,
             winRate: user.winRate,
-            ownedPets: user.ownedPets,
-            ownedEggs: user.ownedEggs,
+            pets: user.pets,
+            eggs: user.eggs,
             preferences: user.preferences,
             createdAt: user.createdAt,
           },
@@ -260,7 +484,7 @@ export const AuthController = {
     }
   },
 
-  // Update user profile
+  // Update user profile - existing method
   async updateProfile(req, res) {
     try {
       const { username, email, preferences } = req.body;
@@ -311,7 +535,7 @@ export const AuthController = {
     }
   },
 
-  // Refresh token
+  // Refresh token - existing method
   async refreshToken(req, res) {
     try {
       const user = req.user;

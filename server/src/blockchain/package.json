@@ -1,0 +1,33 @@
+{
+  "name": "pet-game-blockchain",
+  "version": "1.0.0",
+  "description": "Blockchain contracts for PetVerse game",
+  "main": "index.js",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "deploy:amoy": "npx hardhat run scripts/deploy.js --network amoy",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "export-abis": "npx hardhat run scripts/export-abis.js --network localhost",
+    "test-contracts": "npx hardhat run scripts/test-contracts.js --network localhost",
+    "debug-contracts": "npx hardhat run scripts/debug-contracts.js --network localhost",
+    "node": "npx hardhat node",
+    "test": "npx hardhat test"
+  },
+  "devDependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@nomiclabs/hardhat-waffle": "^2.0.6",
+    "@openzeppelin/contracts": "^4.9.6",
+    "ethereum-waffle": "^4.0.10",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.17.0"
+  },
+  "keywords": [
+    "blockchain",
+    "ethereum",
+    "nft",
+    "smart-contracts"
+  ],
+  "author": "PetVerse Team",
+  "license": "MIT"
+}

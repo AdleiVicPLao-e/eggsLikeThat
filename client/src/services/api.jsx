@@ -1,6 +1,6 @@
 // client/src/services/api.js
 import axios from "axios";
-import { API_BASE_URL } from "../utils/constants.js";
+import { API_BASE_URL } from "../utils/constants";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -74,11 +74,11 @@ export const gameAPI = {
     getPetDetails: (petId) => api.get(`/pets/${petId}`),
     upgradePet: (petId, upgradeData) =>
       api.post(`/pets/${petId}/upgrade`, upgradeData),
-    trainPet: (petId, trainData) => api.post(`/pets/${petId}/train`, trainData),
+    // trainPet: (petId, trainData) => api.post(`/pets/${petId}/train`, trainData),
     fusePets: (fusionData) => api.post("/pets/fuse", fusionData),
     toggleFavorite: (petId) => api.patch(`/pets/${petId}/favorite`),
     getFusionCalculator: () => api.get("/pets/fusion/calculator"),
-    getPetStats: () => api.get("/pets/stats/overview"),
+    // getPetStats: () => api.get("/pets/stats/overview"),
   },
 
   // Egg endpoints
@@ -103,8 +103,8 @@ export const gameAPI = {
     getTransactionHistory: (params = {}) =>
       api.get("/trade/transactions", { params }),
     getUserOffers: (params = {}) => api.get("/trade/offers", { params }),
-    getNegotiationHistory: (offerId) =>
-      api.get(`/trade/offers/${offerId}/negotiation`),
+    // getNegotiationHistory: (offerId) =>
+    //   api.get(`/trade/offers/${offerId}/negotiation`),
     listPet: (listingData) => api.post("/trade/list", listingData),
     cancelListing: (tradeId) => api.delete(`/trade/list/${tradeId}`),
     purchasePet: (tradeId) => api.post(`/trade/purchase/${tradeId}`),
@@ -116,9 +116,9 @@ export const gameAPI = {
     counterOffer: (offerId, counterData) =>
       api.post(`/trade/offer/${offerId}/counter`, counterData),
     cancelOffer: (offerId) => api.delete(`/trade/offer/${offerId}`),
-    getTradeAnalytics: () => api.get("/trade/analytics/overview"),
-    searchListings: (params = {}) => api.get("/trade/search", { params }),
-    getTradeCategories: () => api.get("/trade/categories"),
+    // getTradeAnalytics: () => api.get("/trade/analytics/overview"),
+    // searchListings: (params = {}) => api.get("/trade/search", { params }),
+    // getTradeCategories: () => api.get("/trade/categories"),
   },
 
   // Admin endpoints

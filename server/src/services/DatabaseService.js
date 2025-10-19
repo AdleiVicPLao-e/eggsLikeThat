@@ -3,10 +3,10 @@ import {
   User,
   Pet,
   Egg,
-  Listing,
   Technique,
   Skin,
-} from "../models/dbSchemas.js";
+  BattleHistory,
+} from "../models/dbSchema.js";
 
 export class DatabaseService {
   /** --- 👤 User Operations --- **/
@@ -50,7 +50,6 @@ export class DatabaseService {
     const pet = new Pet(petData);
     const savedPet = await pet.save();
 
-    // Add pet to user's petIds array
     await User.findByIdAndUpdate(petData.ownerId, {
       $push: { petIds: savedPet._id },
     });
@@ -70,24 +69,8 @@ export class DatabaseService {
     });
   }
 
-  async transferPet(petId, newOwnerId) {
-    const pet = await Pet.findById(petId);
-    if (!pet) throw new Error("Pet not found");
-
-    // Remove from old owner
-    await User.findByIdAndUpdate(pet.ownerId, { $pull: { petIds: petId } });
-
-    // Add to new owner and update pet owner
-    await Promise.all([
-      User.findByIdAndUpdate(newOwnerId, { $push: { petIds: petId } }),
-      Pet.findByIdAndUpdate(petId, {
-        ownerId: newOwnerId,
-        isListed: false,
-        updatedAt: new Date(),
-      }),
-    ]);
-
-    return await Pet.findById(petId);
+  async getUserPets(userId) {
+    return await Pet.find({ ownerId: userId });
   }
 
   /** --- 🥚 Egg Operations --- **/
@@ -96,7 +79,6 @@ export class DatabaseService {
     const egg = new Egg(eggData);
     const savedEgg = await egg.save();
 
-    // Add egg to user's eggIds array
     await User.findByIdAndUpdate(eggData.ownerId, {
       $push: { eggIds: savedEgg._id },
     });
@@ -104,21 +86,25 @@ export class DatabaseService {
     return savedEgg;
   }
 
+  async getUserEggs(userId) {
+    return await Egg.find({ ownerId: userId });
+  }
+
   async hatchEgg(eggId) {
     const egg = await Egg.findById(eggId);
     if (!egg) throw new Error("Egg not found");
     if (egg.isHatched) throw new Error("Egg already hatched");
 
-    // Your existing hatching logic here
-    const eggInstance = new Egg(egg.toObject());
+    // Import the Egg class for hatching logic
+    const { Egg: EggClass } = await import("../models/Egg.js");
+    const eggInstance = new EggClass(egg.type, egg.ownerId);
     const result = eggInstance.hatch();
 
     let savedResult;
 
-    if (result.type === "Pet") {
-      // Create new pet
+    if (result instanceof (await import("../models/Pet.js")).Pet) {
       const petData = {
-        ...result,
+        ...result.toJSON(),
         ownerId: egg.ownerId,
       };
       savedResult = await this.createPet(petData);
@@ -128,8 +114,6 @@ export class DatabaseService {
         ownerId: egg.ownerId,
       });
       savedResult = await technique.save();
-
-      // Add to user
       await User.findByIdAndUpdate(egg.ownerId, {
         $push: { techniqueIds: savedResult._id },
       });
@@ -139,64 +123,38 @@ export class DatabaseService {
         ownerId: egg.ownerId,
       });
       savedResult = await skin.save();
-
-      // Add to user
       await User.findByIdAndUpdate(egg.ownerId, {
         $push: { skinIds: savedResult._id },
       });
     }
 
-    // Update egg as hatched and remove from user's eggs
-    await Promise.all([
-      Egg.findByIdAndUpdate(eggId, {
-        isHatched: true,
-        contents: result,
-      }),
-      User.findByIdAndUpdate(egg.ownerId, { $pull: { eggIds: eggId } }),
-    ]);
+    await Egg.findByIdAndUpdate(eggId, {
+      isHatched: true,
+      contents: result,
+    });
+
+    await User.findByIdAndUpdate(egg.ownerId, {
+      $pull: { eggIds: eggId },
+    });
 
     return savedResult;
   }
 
-  /** -- 🏪 Marketplace Operations -- **/
+  /** --- ⚔️ Battle Operations --- **/
 
-  async createListing(listingData) {
-    const listing = new Listing(listingData);
-    return await listing.save();
+  async addBattleHistory(battleData) {
+    const battle = new BattleHistory(battleData);
+    return await battle.save();
   }
 
-  async getActiveListings() {
-    return await Listing.find({ isActive: true })
-      .populate("sellerId", "username walletAddress")
-      .populate("itemId");
+  async getUserBattleHistory(userId, limit = 10) {
+    return await BattleHistory.find({ userId })
+      .sort({ date: -1 })
+      .limit(limit)
+      .populate("userPets");
   }
 
-  async getUserListings(userId) {
-    return await Listing.find({
-      sellerId: userId,
-      isActive: true,
-    }).populate("itemId");
-  }
-
-  async updateListing(listingId, updateData) {
-    return await Listing.findByIdAndUpdate(listingId, updateData, {
-      new: true,
-    });
-  }
-
-  async completeListing(listingId, buyerId) {
-    return await Listing.findByIdAndUpdate(
-      listingId,
-      {
-        isActive: false,
-        soldAt: new Date(),
-        buyerId: buyerId,
-      },
-      { new: true }
-    );
-  }
-
-  /** --- 💰 Balance Operations --- **/
+  /** --- 💰 Balance & Progression --- **/
 
   async updateUserBalance(userId, amount) {
     const user = await User.findById(userId);
@@ -214,5 +172,104 @@ export class DatabaseService {
       },
       { new: true }
     );
+  }
+
+  async updateUserExperience(userId, experience) {
+    const user = await User.findById(userId);
+    const newExperience = user.experience + experience;
+
+    return await User.findByIdAndUpdate(
+      userId,
+      {
+        experience: newExperience,
+        updatedAt: new Date(),
+      },
+      { new: true }
+    );
+  }
+
+  /** --- 🏆 Leaderboard --- **/
+
+  async getLeaderboard(type = "level", limit = 10) {
+    const sortField = type === "level" ? "level" : "experience";
+
+    return await User.find({})
+      .sort({ [sortField]: -1 })
+      .limit(limit)
+      .select("username level experience battlesWon rank");
+  }
+
+  /** --- 📊 Analytics --- **/
+
+  async getUserStats(userId) {
+    const user = await User.findById(userId)
+      .populate("petIds")
+      .populate("eggIds")
+      .populate("techniqueIds")
+      .populate("skinIds");
+
+    if (!user) throw new Error("User not found");
+
+    const pets = user.petIds || [];
+    const eggs = user.eggIds || [];
+
+    return {
+      user: {
+        level: user.level,
+        experience: user.experience,
+        balance: user.balance,
+        totalBattles: (user.battlesWon || 0) + (user.battlesLost || 0),
+        battlesWon: user.battlesWon || 0,
+        battlesLost: user.battlesLost || 0,
+        winRate: user.battlesWon
+          ? (
+              (user.battlesWon /
+                ((user.battlesWon || 0) + (user.battlesLost || 0))) *
+              100
+            ).toFixed(1)
+          : 0,
+        consecutiveDays: user.consecutiveDays || 0,
+        completedQuests: user.completedQuests?.length || 0,
+      },
+      pets: {
+        total: pets.length,
+        byRarity: this.countByRarity(pets),
+        byType: this.countByType(pets),
+        averageLevel: this.calculateAverageLevel(pets),
+      },
+      eggs: {
+        total: eggs.length,
+        hatched: eggs.filter((egg) => egg.isHatched).length,
+        unhatched: eggs.filter((egg) => !egg.isHatched).length,
+      },
+      collection: {
+        techniques: user.techniqueIds?.length || 0,
+        skins: user.skinIds?.length || 0,
+        nftTokens: user.nftTokens?.length || 0,
+      },
+    };
+  }
+
+  // Helper methods for stats
+  countByRarity(items) {
+    const rarities = {};
+    items.forEach((item) => {
+      rarities[item.rarity] = (rarities[item.rarity] || 0) + 1;
+    });
+    return rarities;
+  }
+
+  countByType(items) {
+    const types = {};
+    items.forEach((item) => {
+      types[item.type] = (types[item.type] || 0) + 1;
+    });
+    return types;
+  }
+
+  calculateAverageLevel(pets) {
+    if (pets.length === 0) return 0;
+    const total = pets.reduce((sum, pet) => sum + (pet.level || 1), 0);
+    return (total / pets.length).toFixed(1);
   }
 }

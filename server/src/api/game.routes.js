@@ -1,13 +1,13 @@
 // routes/game.route.js
 import express from "express";
 import { GameController } from "../controllers/GameController.js";
-import { authenticate } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js"; // Changed from 'authenticate' to 'authMiddleware'
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authMiddleware); // Changed from 'authenticate' to 'authMiddleware'
 
 // Egg hatching
 router.post("/hatch", gameActionLimiter, GameController.hatchEgg);

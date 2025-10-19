@@ -1,6 +1,6 @@
 // client/src/context/UserContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { gameAPI } from "../services/api.js";
+import { gameAPI } from "../services/api";
 
 const UserContext = createContext();
 
@@ -57,7 +57,7 @@ export const UserProvider = ({ children }) => {
 
       if (response.data.success) {
         const { user: newUser, token } = response.data.data;
-        
+
         // Store user data and token
         localStorage.setItem("petverse_user", JSON.stringify(newUser));
         localStorage.setItem("petverse_token", token);
@@ -70,9 +70,9 @@ export const UserProvider = ({ children }) => {
         throw new Error(response.data.message || "Registration failed");
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || error.message 
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
       };
     } finally {
       setIsLoading(false);
@@ -100,9 +100,9 @@ export const UserProvider = ({ children }) => {
         throw new Error(response.data.message || "Login failed");
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || error.message 
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
       };
     } finally {
       setIsLoading(false);
@@ -129,9 +129,9 @@ export const UserProvider = ({ children }) => {
         throw new Error(response.data.message || "Guest login failed");
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || error.message 
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
       };
     } finally {
       setIsLoading(false);
@@ -149,7 +149,7 @@ export const UserProvider = ({ children }) => {
   const updateProfile = async (profileData) => {
     try {
       const response = await gameAPI.auth.updateProfile(profileData);
-      
+
       if (response.data.success) {
         const updatedUser = response.data.data.user;
         setUser(updatedUser);
@@ -159,9 +159,9 @@ export const UserProvider = ({ children }) => {
         throw new Error(response.data.message || "Profile update failed");
       }
     } catch (error) {
-      return { 
-        success: false, 
-        error: error.response?.data?.message || error.message 
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
       };
     }
   };

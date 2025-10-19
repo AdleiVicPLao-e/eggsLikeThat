@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { useGameAPI } from "../hooks/useGameAPI.jsx";
-import { useUser } from "./UserContext.jsx";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import { useGameAPI } from "../hooks/useGameAPI";
+import { useUser } from "./UserContext";
 
 const GameContext = createContext();
 
@@ -29,7 +35,7 @@ export const GameProvider = ({ children }) => {
     updatePets: setPets,
     updateEggs: setEggs,
     updateInventory: setInventory,
-    onError: (error) => console.error("Game API Error:", error)
+    onError: (error) => console.error("Game API Error:", error),
   });
 
   // Load game data when user changes
@@ -53,7 +59,7 @@ export const GameProvider = ({ children }) => {
       // Load pets and eggs in parallel
       const [petsData, eggsData] = await Promise.all([
         gameAPI.getUserPets(),
-        gameAPI.getUserEggs()
+        gameAPI.getUserEggs(),
       ]);
 
       // Update state with API responses
@@ -63,7 +69,7 @@ export const GameProvider = ({ children }) => {
       if (eggsData?.success && eggsData.data?.eggs) {
         setEggs(eggsData.data.eggs);
       }
-      
+
       setLastSync(new Date().toISOString());
     } catch (error) {
       console.error("Error loading game data:", error);
@@ -219,18 +225,21 @@ export const GameProvider = ({ children }) => {
   // ---------------------------
   // 🎮 Game Actions (Using API)
   // ---------------------------
-  const handleHatchEgg = useCallback(async (eggId) => {
-    try {
-      const result = await gameAPI.hatchEgg(eggId);
-      if (result.success) {
-        return result;
+  const handleHatchEgg = useCallback(
+    async (eggId) => {
+      try {
+        const result = await gameAPI.hatchEgg(eggId);
+        if (result.success) {
+          return result;
+        }
+        throw new Error(result.error || "Hatching failed");
+      } catch (error) {
+        console.error("Error hatching egg:", error);
+        throw error;
       }
-      throw new Error(result.error || "Hatching failed");
-    } catch (error) {
-      console.error("Error hatching egg:", error);
-      throw error;
-    }
-  }, [gameAPI]);
+    },
+    [gameAPI]
+  );
 
   const handleFeedPet = useCallback(async (petId, foodItem) => {
     // This would be implemented based on your API
@@ -308,16 +317,16 @@ export const GameProvider = ({ children }) => {
       upgradePet: gameAPI.upgradePet,
       trainPet: gameAPI.trainPet,
       fusePets: gameAPI.fusePets,
-      
+
       // Eggs
       getUserEggs: gameAPI.getUserEggs,
       purchaseEgg: gameAPI.purchaseEgg,
       getFreeEgg: gameAPI.getFreeEgg,
-      
+
       // Game
       startBattle: gameAPI.startBattle,
       completeQuest: gameAPI.completeQuest,
-      
+
       // Trading
       listPet: gameAPI.listPet,
       purchasePet: gameAPI.purchasePet,

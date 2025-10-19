@@ -7,7 +7,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "ethers": "^6.7.0",
+    "ethers": "^5.7.2",
     "express": "^4.18.2",
     "express-rate-limit": "^6.10.0",
     "helmet": "^7.0.0",
@@ -18,12 +18,11 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "compile": "hardhat compile",
-    "deploy:amoy": "hardhat run scripts/deploy.js --network amoy",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
-    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "test-contracts": "hardhat run scripts/test-contracts.js",
-    "node": "hardhat node",
-    "test": "hardhat test"
+    "blockchain:compile": "cd src/blockchain && npm run compile",
+    "blockchain:deploy:amoy": "cd src/blockchain && npm run deploy:amoy",
+    "blockchain:deploy:sepolia": "cd src/blockchain && npm run deploy:sepolia",
+    "blockchain:deploy:local": "cd src/blockchain && npm run deploy:local",
+    "blockchain:test": "cd src/blockchain && npm run test",
+    "blockchain:node": "cd src/blockchain && npm run node"
   }
 }

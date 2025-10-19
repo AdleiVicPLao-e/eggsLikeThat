@@ -1,5 +1,6 @@
 import { serverRNGService } from "./RNGService.js";
-import User from "../models/User.js";
+import { EGG_TYPES } from "../utils/constants.js";
+import { User } from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import logger from "../utils/logger.js";
 
@@ -363,6 +364,22 @@ class RewardService {
             });
             break;
 
+          case "egg":
+            // Generate and add egg using RNGService
+            const eggType = item.eggType || EGG_TYPES.BASIC;
+            const egg = serverRNGService.generateEggForDB(user.id, eggType);
+
+            if (!user.eggs) user.eggs = [];
+            user.eggs.push(egg);
+
+            appliedItems.push({
+              type: "egg",
+              eggType: eggType,
+              rarity: item.rarity,
+              status: "added_to_inventory",
+            });
+            break;
+
           case "cosmetic":
             // Add cosmetic to user's collection
             if (!user.skins) user.skins = [];
@@ -422,19 +439,14 @@ class RewardService {
     }
 
     if (specialRewards.exclusivePet) {
-      // Generate and add exclusive pet
-      const petData = serverRNGService.generatePetForDB(user.id);
-      const Pet = (await import("../models/Pet.js")).default;
-      const exclusivePet = new Pet({
-        ...petData,
-        ...specialRewards.exclusivePet,
-        isExclusive: true,
-      });
-      user.addPet(exclusivePet);
+      // Generate and add exclusive pet using RNGService
+      const pet = serverRNGService.generatePet(user.id);
+      pet.isExclusive = true;
+      user.addPet(pet);
     }
   }
 
-  // Item generation methods
+  // Item generation methods - UPDATED to use proper egg types
   generateQuestItems(questDifficulty) {
     const itemChances = {
       easy: 0.1,
@@ -461,10 +473,15 @@ class RewardService {
     const items = [];
 
     // Always give an egg for achievements
+    let eggType = EGG_TYPES.BASIC;
+    if (achievementTier >= 3) {
+      eggType = EGG_TYPES.ATTRIBUTE; // Use attribute egg instead of premium
+    }
+
     items.push({
       type: "egg",
       quantity: 1,
-      eggType: achievementTier >= 3 ? "PREMIUM" : "BASIC",
+      eggType: eggType,
       rarity: achievementTier >= 5 ? "rare" : "common",
     });
 
@@ -501,6 +518,16 @@ class RewardService {
       });
     }
 
+    // Cosmetic egg for 30-day streak
+    if (consecutiveDays >= 30) {
+      items.push({
+        type: "egg",
+        quantity: 1,
+        eggType: EGG_TYPES.COSMETIC,
+        rarity: "epic",
+      });
+    }
+
     return items;
   }
 
@@ -511,25 +538,26 @@ class RewardService {
     items.push({
       type: "egg",
       quantity: 1,
-      eggType: "BASIC",
+      eggType: EGG_TYPES.BASIC,
       rarity: "common",
     });
 
-    // Premium egg every 10 levels
+    // Attribute egg every 10 levels
     if (level % 10 === 0) {
       items.push({
         type: "egg",
         quantity: 1,
-        eggType: "PREMIUM",
+        eggType: EGG_TYPES.ATTRIBUTE,
         rarity: "rare",
       });
     }
 
-    // Special cosmetic every 25 levels
+    // Cosmetic egg every 25 levels
     if (level % 25 === 0) {
       items.push({
-        type: "cosmetic",
-        name: `Level ${level} Master`,
+        type: "egg",
+        quantity: 1,
+        eggType: EGG_TYPES.COSMETIC,
         rarity: "epic",
       });
     }
@@ -575,6 +603,54 @@ class RewardService {
     };
 
     return titles[tier] || "Achiever";
+  }
+
+  // New method to hatch eggs using RNGService
+  async hatchUserEgg(userId, eggId) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const egg = user.eggs?.find((e) => e.id === eggId);
+      if (!egg) {
+        throw new Error("Egg not found");
+      }
+
+      if (egg.isHatched) {
+        throw new Error("Egg already hatched");
+      }
+
+      // Use RNGService to hatch the egg
+      const result = serverRNGService.hatchEgg(egg);
+
+      // Update egg status
+      egg.isHatched = true;
+      egg.hatchedAt = new Date();
+
+      // If it's a pet, add to user's pets
+      if (result instanceof (await import("../models/Pet.js")).default) {
+        user.addPet(result);
+      }
+
+      // If it's a cosmetic or technique, add to user's collection
+      if (result.type === "Cosmetic" || result.type === "Technique") {
+        if (!user.collections) user.collections = [];
+        user.collections.push(result);
+      }
+
+      await user.save();
+
+      return {
+        success: true,
+        result,
+        eggId: egg.id,
+      };
+    } catch (error) {
+      logger.error("Error hatching egg:", error);
+      return { success: false, error: error.message };
+    }
   }
 
   // Analytics methods

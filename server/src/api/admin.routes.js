@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticate } from "../middleware/authMiddleware.js";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 import { apiLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
@@ -17,7 +17,7 @@ const requireAdmin = (req, res, next) => {
 };
 
 // All admin routes require authentication and admin privileges
-router.use(authenticate, requireAdmin, apiLimiter);
+router.use(authMiddleware, requireAdmin, apiLimiter);
 
 // Admin dashboard stats
 router.get("/stats", async (req, res) => {
