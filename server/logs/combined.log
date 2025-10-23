@@ -28,3 +28,77 @@
 {"level":"info","message":"🔗 Client URL: http://localhost:3000","service":"pet-game-server","timestamp":"2025-10-19T16:36:19.999Z"}
 {"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-19T16:36:19.999Z"}
 {"level":"warn","message":"MongoDB disconnected","service":"pet-game-server","timestamp":"2025-10-19T16:36:50.005Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.754Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.851Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.852Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:3000","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.853Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.854Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-23T05:47:14.938Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:10:11.949Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:10:11.957Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:10:11.994Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:19:10.022Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:19:10.188Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:19:10.386Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-23T06:32:11.919Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.031Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.100Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.101Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.101Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.102Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-23T06:41:30.209Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:32.613Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:33.290Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:34.743Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:34.876Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:34.929Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:36.184Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:36.375Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:36.509Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:37.483Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:37.574Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:38.459Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:38.511Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:38.587Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:39.758Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:39.770Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:39.839Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:40.458Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:40.473Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:41.190Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:41.284Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:41.323Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:42.472Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:42.924Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:43.075Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:46.572Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:46.816Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:47.248Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:50.423Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:50.449Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:50.529Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:52.352Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:52.461Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:52.755Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:55.120Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:55.172Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:55.317Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:57.107Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:57.180Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:57.367Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:59.546Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:42:59.594Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:00.014Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:01.788Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:01.859Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:01.912Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:03.560Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:03.564Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:03.987Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:05.854Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:05.899Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:05.962Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:07.506Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:07.512Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:07.882Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-23T06:52:37.845Z"}

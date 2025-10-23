@@ -9,7 +9,18 @@
     "description": "Fire-type pets excel in attack power",
     "strengths": ["AIR", "LIGHT"],
     "weaknesses": ["WATER", "DARK"],
-    "abilities": ["Flame Burst", "Fire Wall", "Inferno", "Ember Strike"]
+    "abilities": [
+      "Flame Burst",
+      "Fire Wall",
+      "Inferno",
+      "Ember Strike",
+      "Blazing Charge",
+      "Volcanic Eruption",
+      "Phoenix Flame",
+      "Solar Flare",
+      "Big Bang",
+      "Supernova"
+    ]
   },
   "WATER": {
     "id": 1,
@@ -21,7 +32,18 @@
     "description": "Water-type pets have balanced stats and healing",
     "strengths": ["FIRE", "EARTH"],
     "weaknesses": ["AIR", "LIGHT"],
-    "abilities": ["Water Shield", "Tidal Wave", "Healing Rain", "Frost Bite"]
+    "abilities": [
+      "Water Shield",
+      "Tidal Wave",
+      "Healing Rain",
+      "Frost Bite",
+      "Whirlpool",
+      "Abyssal Call",
+      "Tsunami",
+      "Ocean Depths",
+      "Poseidon's Trident",
+      "Abyssal Maelstrom"
+    ]
   },
   "EARTH": {
     "id": 2,
@@ -33,7 +55,18 @@
     "description": "Earth-type pets have high defense and HP",
     "strengths": ["WATER", "AIR"],
     "weaknesses": ["FIRE", "DARK"],
-    "abilities": ["Earth Slam", "Stone Skin", "Earthquake", "Mud Shot"]
+    "abilities": [
+      "Earth Slam",
+      "Stone Skin",
+      "Earthquake",
+      "Mud Shot",
+      "Petrify",
+      "Mountain Crash",
+      "Terraform",
+      "Continental Drift",
+      "World Smasher",
+      "Gaia's Wrath"
+    ]
   },
   "AIR": {
     "id": 3,
@@ -45,7 +78,18 @@
     "description": "Air-type pets are fast with high evasion",
     "strengths": ["WATER", "EARTH"],
     "weaknesses": ["FIRE", "LIGHT"],
-    "abilities": ["Air Slash", "Gust", "Cyclone", "Sonic Boom"]
+    "abilities": [
+      "Air Slash",
+      "Gust",
+      "Cyclone",
+      "Sonic Boom",
+      "Tornado",
+      "Zephyr Dance",
+      "Hurricane",
+      "Atmospheric Collapse",
+      "Typhoon Fury",
+      "Sky God Ascension"
+    ]
   },
   "LIGHT": {
     "id": 4,
@@ -57,7 +101,18 @@
     "description": "Light-type pets have healing and support abilities",
     "strengths": ["DARK", "EARTH"],
     "weaknesses": ["FIRE", "AIR"],
-    "abilities": ["Light Heal", "Divine Protection", "Holy Strike", "Purify"]
+    "abilities": [
+      "Light Heal",
+      "Divine Protection",
+      "Holy Strike",
+      "Purify",
+      "Radiant Beam",
+      "Angelic Blessing",
+      "Divine Judgment",
+      "Heaven's Gate",
+      "Archangel's Wrath",
+      "Divine Intervention"
+    ]
   },
   "DARK": {
     "id": 5,
@@ -69,6 +124,17 @@
     "description": "Dark-type pets have debuffs and high critical chance",
     "strengths": ["LIGHT", "AIR"],
     "weaknesses": ["WATER", "EARTH"],
-    "abilities": ["Dark Curse", "Shadow Claw", "Nightmare", "Soul Drain"]
+    "abilities": [
+      "Dark Curse",
+      "Shadow Claw",
+      "Nightmare",
+      "Soul Drain",
+      "Shadow Walk",
+      "Void Blast",
+      "Abyssal Rift",
+      "Eternal Darkness",
+      "Demon Lord's Embrace",
+      "Apocalypse"
+    ]
   }
 }

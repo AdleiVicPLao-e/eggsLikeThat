@@ -26,10 +26,6 @@ router.get("/transactions", TradeController.getTransactionHistory);
 
 // Offer management
 router.get("/offers", TradeController.getUserOffers);
-// router.get(
-//   "/offers/:offerId/negotiation",
-//   TradeController.getNegotiationHistory
-// );
 
 // Trading actions (require wallet)
 router.post(
@@ -91,10 +87,5 @@ router.delete(
   gameActionLimiter,
   TradeController.cancelOffer
 );
-
-// // Additional trade routes
-// router.get("/analytics/overview", TradeController.getTradeAnalytics);
-// router.get("/search", TradeController.searchListings);
-// router.get("/categories", TradeController.getTradeCategories);
 
 export default router;

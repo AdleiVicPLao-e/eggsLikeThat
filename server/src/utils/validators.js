@@ -20,7 +20,18 @@ export const userLoginSchema = Joi.object({
 export const petCreationSchema = Joi.object({
   name: Joi.string().min(1).max(50).required(),
   tier: Joi.string()
-    .valid("common", "uncommon", "rare", "epic", "legendary")
+    .valid(
+      "common",
+      "uncommon",
+      "rare",
+      "epic",
+      "legendary",
+      "mythic",
+      "celestial",
+      "exotic",
+      "ultimate",
+      "godly"
+    )
     .required(),
   type: Joi.string()
     .valid("Fire", "Water", "Earth", "Air", "Light", "Dark")

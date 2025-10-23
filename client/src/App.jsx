@@ -8,6 +8,7 @@ import Hatchery from "./pages/Hatchery.jsx";
 import Game from "./pages/Game.jsx";
 import Marketplace from "./pages/Marketplace.jsx";
 import Profile from "./pages/Profile.jsx";
+import AuthModal from "./components/Auth/AuthModal.jsx"; // Add this import
 
 function App() {
   return (
@@ -49,6 +50,9 @@ function App() {
                 />
               </Routes>
             </main>
+
+            {/* Add AuthModal here */}
+            <AuthModal />
 
             {/* Footer */}
             <footer className="bg-gray-800 border-t border-gray-700 py-8">

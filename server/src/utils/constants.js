@@ -1,6 +1,18 @@
 // utils/constants.js
-import abilitiesData from "../constants/abilities.json" assert { type: "json" };
-import typesData from "../constants/types.json" assert { type: "json" };
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load JSON files using ES6 imports
+const abilitiesData = JSON.parse(
+  readFileSync(join(__dirname, "../constants/abilities.json"), "utf8")
+);
+const typesData = JSON.parse(
+  readFileSync(join(__dirname, "../constants/types.json"), "utf8")
+);
 
 // 🎯 Rarities
 export const PET_RARITIES = [
@@ -30,64 +42,103 @@ export const EGG_TYPES = {
   ATTRIBUTE: "attribute",
 };
 
-// 🧠 Techniques
-export const TECHNIQUES = [
-  {
-    name: "Scoped",
+// 🧠 Techniques with proper multipliers
+export const TECHNIQUES = {
+  Scoped: {
     levels: [
-      { level: 1, chance: 12, effect: "Range +5%" },
-      { level: 2, chance: 9, effect: "Range +8%" },
-      { level: 3, chance: 5, effect: "Range +10%" },
+      { level: 1, chance: 12, cooldown: 1.05 },
+      { level: 2, chance: 9, cooldown: 1.08 },
+      { level: 3, chance: 5, cooldown: 1.1 },
     ],
   },
-  {
-    name: "Accelerate",
+  Accelerate: {
     levels: [
-      { level: 1, chance: 10, effect: "SPA -3%" },
-      { level: 2, chance: 7, effect: "SPA -5%" },
-      { level: 3, chance: 4, effect: "SPA -8%" },
+      { level: 1, chance: 10, spa: 0.97 },
+      { level: 2, chance: 7, spa: 0.95 },
+      { level: 3, chance: 4, spa: 0.92 },
     ],
   },
-  {
-    name: "Sturdy",
+  Sturdy: {
     levels: [
-      { level: 1, chance: 10, effect: "Damage +5%" },
-      { level: 2, chance: 7, effect: "Damage +8%" },
-      { level: 3, chance: 4, effect: "Damage +10%" },
+      { level: 1, chance: 10, dmg: 1.05 },
+      { level: 2, chance: 7, dmg: 1.08 },
+      { level: 3, chance: 4, dmg: 1.1 },
     ],
   },
-  { name: "Shining", chance: 9, effect: "Money +10%" },
-  { name: "Eagle Eye", chance: 4, effect: "Range +15%" },
-  { name: "Golden", chance: 3.5, effect: "Money +12.5%" },
-  { name: "Hyper Speed", chance: 3, effect: "SPA -12.5%" },
-  { name: "Juggernaut", chance: 3, effect: "Damage +12.5%, SPA -2.5%" },
-  {
-    name: "Elemental Master",
+  Shining: { chance: 9, moneyBonus: 1.1 },
+  "Eagle Eye": { chance: 4, cooldown: 1.15 },
+  Golden: { chance: 3.5, moneyBonus: 1.125 },
+  "Hyper Speed": { chance: 3, spa: 0.875 },
+  Juggernaut: { chance: 3, dmg: 1.125, spa: 0.975 },
+  "Elemental Master": {
     chance: 2,
-    effect: "DOT Duration x2.5, Damage +5%",
+    dmg: 1.05,
+    dotDuration: 2.5,
+    dotDamage: 0.75,
   },
-  {
-    name: "Vulture",
-    chance: 2.25,
-    effect: "Range +25%, Crit +5%, Damage +15%",
-  },
-  { name: "Diamond", chance: 1.75, effect: "Damage +5%, Money +20%" },
-  { name: "Cosmic", chance: 1, effect: "Damage +15%, Range +10%, SPA -15%" },
-  { name: "Demi God", chance: 1, effect: "Damage +25%, SPA -5%" },
-  {
-    name: "All Seeing",
+  Vulture: { chance: 2.25, cooldown: 1.25, critChance: 1.05, critDamage: 1.15 },
+  Diamond: { chance: 1.75, dmg: 1.05, moneyBonus: 1.2 },
+  Cosmic: { chance: 1, dmg: 1.15, cooldown: 1.1, spa: 0.85 },
+  "Demi God": { chance: 1, dmg: 1.25, spa: 0.95 },
+  "All Seeing": {
     chance: 0.35,
-    effect: "Range +50%, Crit +25%, Damage +25%",
+    dmg: 1.25,
+    cooldown: 1.5,
+    critChance: 1.25,
+    critDamage: 2.0,
   },
-  { name: "Entrepreneur", chance: 0.3, effect: "Money +45%, Damage +25%" },
-  {
-    name: "Shinigami",
+  Entrepreneur: {
+    chance: 0.3,
+    dmg: 1.25,
+    cooldown: 1.05,
+    spa: 0.9,
+    moneyBonus: 1.45,
+  },
+  Shinigami: {
     chance: 0.2,
-    effect: "Damage +75%, Crit +10%, Range +30%",
+    dmg: 1.75,
+    cooldown: 1.3,
+    spa: 0.85,
+    critChance: 1.1,
+    critDamage: 1.25,
+    onePlacement: true,
   },
-  { name: "Overlord", chance: 0.2, effect: "Damage +425%, ONE PLACEMENT" },
-  { name: "Avatar", chance: 0.1, effect: "Damage +550%, ONE PLACEMENT" },
-  { name: "Glitched", chance: 0.03, effect: "Damage +750%, ONE PLACEMENT" },
+  Overlord: {
+    chance: 0.2,
+    dmg: 5.25,
+    cooldown: 1.2,
+    spa: 0.85,
+    critChance: 1.15,
+    critDamage: 1.25,
+    onePlacement: true,
+  },
+  Avatar: {
+    chance: 0.1,
+    dmg: 6.5,
+    cooldown: 1.3,
+    spa: 0.85,
+    critChance: 1.15,
+    critDamage: 1.25,
+    onePlacement: true,
+  },
+  Glitched: {
+    chance: 0.03,
+    dmg: 8.5,
+    cooldown: 1.35,
+    spa: 0.85,
+    moneyBonus: 1.6,
+    critChance: 1.15,
+    critDamage: 1.75,
+    onePlacement: true,
+  },
+};
+
+// ONE PLACEMENT techniques
+export const ONE_PLACEMENT_TECHNIQUES = [
+  "Shinigami",
+  "Overlord",
+  "Avatar",
+  "Glitched",
 ];
 
 // 🌋 Pet elemental types and abilities
@@ -100,15 +151,28 @@ export const ALL_ABILITIES = Object.values(abilitiesData).reduce((acc, set) => {
   return acc;
 }, {});
 
-// Helper to get abilities of a type dynamically
+// Helper to get technique multipliers
+export const getTechniqueMultipliers = (techniqueName, level = 1) => {
+  const technique = TECHNIQUES[techniqueName];
+  if (!technique) return {};
+
+  if (technique.levels && level) {
+    const levelData =
+      technique.levels.find((l) => l.level === level) ||
+      technique.levels[technique.levels.length - 1];
+    return { ...levelData };
+  }
+
+  return { ...technique };
+};
+
+// Check if technique requires one placement
+export const isOnePlacementTechnique = (techniqueName) => {
+  return ONE_PLACEMENT_TECHNIQUES.includes(techniqueName);
+};
+
+// Get abilities by type
 export const getAbilitiesByType = (typeName) => {
-  const type = TYPES[typeName.toUpperCase()];
-  if (!type || !type.abilities) return [];
-  return type.abilities
-    .map((name) =>
-      Object.values(ALL_ABILITIES).find(
-        (a) => a.name.toLowerCase() === name.toLowerCase()
-      )
-    )
-    .filter(Boolean);
+  if (!typeName || !abilitiesData[typeName]) return [];
+  return Object.values(abilitiesData[typeName]);
 };

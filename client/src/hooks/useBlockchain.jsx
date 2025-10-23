@@ -9,26 +9,26 @@ import SkinNFTABI from "../abis/SkinNFT.json";
 import TechniqueNFTABI from "../abis/TechniqueNFT.json";
 import MarketplaceABI from "../abis/Marketplace.json";
 
-// Contract configuration
+// Contract configuration - use VITE_ prefix for Vite environment variables
 const CONTRACT_CONFIG = {
   PetNFT: {
-    address: import.meta.env.REACT_APP_PET_NFT_CONTRACT,
+    address: import.meta.env.VITE_PET_NFT_CONTRACT,
     abi: PetNFTABI.abi,
   },
   EggNFT: {
-    address: import.meta.env.REACT_APP_EGG_NFT_CONTRACT,
+    address: import.meta.env.VITE_EGG_NFT_CONTRACT,
     abi: EggNFTABI.abi,
   },
   SkinNFT: {
-    address: import.meta.env.REACT_APP_SKIN_NFT_CONTRACT,
+    address: import.meta.env.VITE_SKIN_NFT_CONTRACT,
     abi: SkinNFTABI.abi,
   },
   TechniqueNFT: {
-    address: import.meta.env.REACT_APP_TECHNIQUE_NFT_CONTRACT,
+    address: import.meta.env.VITE_TECHNIQUE_NFT_CONTRACT,
     abi: TechniqueNFTABI.abi,
   },
   Marketplace: {
-    address: import.meta.env.REACT_APP_MARKETPLACE_CONTRACT,
+    address: import.meta.env.VITE_MARKETPLACE_CONTRACT,
     abi: MarketplaceABI.abi,
   },
 };
@@ -66,20 +66,20 @@ export const useBlockchain = () => {
     const initProvider = async () => {
       if (window.ethereum) {
         try {
-          const web3Provider = new ethers.providers.Web3Provider(
-            window.ethereum
-          );
+          // Use BrowserProvider for ethers v6
+          const web3Provider = new ethers.BrowserProvider(window.ethereum);
           setProvider(web3Provider);
 
           // Get current network
           const network = await web3Provider.getNetwork();
-          setChainId(network.chainId);
+          setChainId(Number(network.chainId));
 
           // Check if connected
-          const accounts = await web3Provider.listAccounts();
+          const accounts = await web3Provider.send("eth_accounts", []);
           if (accounts.length > 0) {
             setAccount(accounts[0]);
-            setSigner(web3Provider.getSigner());
+            const signerInstance = await web3Provider.getSigner();
+            setSigner(signerInstance);
             setIsConnected(true);
           }
         } catch (err) {
@@ -105,18 +105,22 @@ export const useBlockchain = () => {
       setIsLoading(true);
       setError(null);
 
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-      const accounts = await web3Provider.listAccounts();
+      // Request accounts access
+      const accounts = await window.ethereum.request({
+        method: "eth_requestAccounts",
+      });
+
+      const web3Provider = new ethers.BrowserProvider(window.ethereum);
 
       if (accounts.length > 0) {
         setProvider(web3Provider);
-        setSigner(web3Provider.getSigner());
+        const signerInstance = await web3Provider.getSigner();
+        setSigner(signerInstance);
         setAccount(accounts[0]);
         setIsConnected(true);
 
         const network = await web3Provider.getNetwork();
-        setChainId(network.chainId);
+        setChainId(Number(network.chainId));
 
         return true;
       }
@@ -143,16 +147,31 @@ export const useBlockchain = () => {
       });
 
       // Refresh provider
-      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+      const web3Provider = new ethers.BrowserProvider(window.ethereum);
       setProvider(web3Provider);
-      setSigner(web3Provider.getSigner());
+      const signerInstance = await web3Provider.getSigner();
+      setSigner(signerInstance);
 
       const network = await web3Provider.getNetwork();
-      setChainId(network.chainId);
+      setChainId(Number(network.chainId));
 
       return true;
     } catch (err) {
       console.error("Error switching network:", err);
+
+      // If chain is not added, try to add it
+      if (err.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [NETWORK_CONFIG[targetChainId]],
+          });
+          return true;
+        } catch (addError) {
+          console.error("Error adding network:", addError);
+        }
+      }
+
       setError("Failed to switch network");
       return false;
     } finally {
@@ -162,7 +181,7 @@ export const useBlockchain = () => {
 
   // Get contract instance
   const getContract = useCallback(
-    (contractName, withSigner = false) => {
+    async (contractName, withSigner = false) => {
       if (!provider) {
         throw new Error("Provider not initialized");
       }
@@ -172,7 +191,13 @@ export const useBlockchain = () => {
         throw new Error(`Unknown contract: ${contractName}`);
       }
 
-      const contractProvider = withSigner && signer ? signer : provider;
+      let contractProvider;
+      if (withSigner && signer) {
+        contractProvider = signer;
+      } else {
+        contractProvider = provider;
+      }
+
       return new ethers.Contract(
         contractConfig.address,
         contractConfig.abi,
@@ -187,11 +212,11 @@ export const useBlockchain = () => {
     if (!account) return [];
 
     try {
-      const petContract = getContract("PetNFT", true);
+      const petContract = await getContract("PetNFT", true);
       const balance = await petContract.balanceOf(account);
 
       const pets = [];
-      for (let i = 0; i < balance.toNumber(); i++) {
+      for (let i = 0; i < Number(balance); i++) {
         const tokenId = await petContract.tokenOfOwnerByIndex(account, i);
         const metadata = await petContract.getPetMetadata(tokenId);
         const tokenURI = await petContract.tokenURI(tokenId);
@@ -216,14 +241,14 @@ export const useBlockchain = () => {
     if (!account) return [];
 
     try {
-      const eggContract = getContract("EggNFT", true);
+      const eggContract = await getContract("EggNFT", true);
 
       const eggTypes = [1, 2, 3]; // BASIC, COSMETIC, ATTRIBUTE
       const eggs = [];
 
       for (const eggType of eggTypes) {
         const balance = await eggContract.balanceOf(account, eggType);
-        if (balance.gt(0)) {
+        if (Number(balance) > 0) {
           const eggName = await eggContract.getEggTypeName(eggType);
           eggs.push({
             type: eggType,
@@ -252,13 +277,13 @@ export const useBlockchain = () => {
       try {
         setIsLoading(true);
 
-        const marketplace = getContract("Marketplace", true);
+        const marketplace = await getContract("Marketplace", true);
         const tx = await marketplace.listItem(
           nftContract,
           itemType,
           tokenId,
           amount,
-          ethers.utils.parseEther(price.toString())
+          ethers.parseEther(price.toString())
         );
 
         const receipt = await tx.wait();
@@ -284,9 +309,9 @@ export const useBlockchain = () => {
       try {
         setIsLoading(true);
 
-        const marketplace = getContract("Marketplace", true);
+        const marketplace = await getContract("Marketplace", true);
         const tx = await marketplace.buyItem(listingId, {
-          value: ethers.utils.parseEther(price.toString()),
+          value: ethers.parseEther(price.toString()),
         });
 
         const receipt = await tx.wait();
@@ -305,7 +330,7 @@ export const useBlockchain = () => {
   // Get marketplace listings
   const getMarketplaceListings = useCallback(async () => {
     try {
-      const marketplace = getContract("Marketplace");
+      const marketplace = await getContract("Marketplace");
       const listings = await marketplace.getActiveListings();
 
       return listings.map((listing) => ({
@@ -315,7 +340,7 @@ export const useBlockchain = () => {
         itemType: listing.itemType,
         tokenId: listing.tokenId.toString(),
         amount: listing.amount.toString(),
-        price: ethers.utils.formatEther(listing.price),
+        price: ethers.formatEther(listing.price),
         active: listing.active,
       }));
     } catch (err) {
@@ -335,7 +360,7 @@ export const useBlockchain = () => {
       try {
         setIsLoading(true);
 
-        const petContract = getContract("PetNFT", true);
+        const petContract = await getContract("PetNFT", true);
         const tx = await petContract.levelUp(tokenId);
 
         const receipt = await tx.wait();
@@ -350,6 +375,39 @@ export const useBlockchain = () => {
     },
     [signer, getContract]
   );
+
+  // Sign message for authentication
+  const signMessage = useCallback(
+    async (message) => {
+      if (!signer) {
+        throw new Error("Wallet not connected");
+      }
+
+      try {
+        const signature = await signer.signMessage(message);
+        return signature;
+      } catch (err) {
+        console.error("Error signing message:", err);
+        throw new Error("Failed to sign message");
+      }
+    },
+    [signer]
+  );
+
+  // Get wallet balance
+  const getWalletBalance = useCallback(async () => {
+    if (!provider || !account) {
+      throw new Error("Wallet not connected");
+    }
+
+    try {
+      const balance = await provider.getBalance(account);
+      return ethers.formatEther(balance);
+    } catch (err) {
+      console.error("Error getting balance:", err);
+      throw new Error("Failed to get wallet balance");
+    }
+  }, [provider, account]);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -379,6 +437,8 @@ export const useBlockchain = () => {
     buyItem,
     getMarketplaceListings,
     levelUpPet,
+    signMessage,
+    getWalletBalance,
     clearError,
   };
 };

@@ -26,6 +26,7 @@ const Home = () => {
     showAuthModal,
     setShowAuthModal,
     setAuthMode,
+    quickAuth,
   } = useUser();
   const { pets, eggs, lastSync } = useGame();
   const navigate = useNavigate();
@@ -52,19 +53,20 @@ const Home = () => {
     }
   };
 
-  const handleCreateAccount = () => {
-    setShowAuthModal(true);
-    setAuthMode("register");
-  };
+  const handleCreateAccount = quickAuth.createAccount;
+  const handleLogin = quickAuth.signIn;
+  const handleGuestPlay = quickAuth.playAsGuest;
 
-  const handleLogin = () => {
-    setShowAuthModal(true);
-    setAuthMode("login");
-  };
-
-  const handleGuestPlay = () => {
-    setShowAuthModal(true);
-    setAuthMode("guest");
+  // Fixed handleConnectWallet function
+  const handleConnectWallet = () => {
+    if (!isAuthenticated) {
+      // If not authenticated, show auth modal first
+      setShowAuthModal(true);
+      setAuthMode("register");
+    } else {
+      // If already authenticated, navigate to profile to connect wallet
+      navigate("/profile");
+    }
   };
 
   // Format currency for display
@@ -308,18 +310,12 @@ const Home = () => {
       title: "Connect Wallet",
       description:
         "Use your crypto wallet to access blockchain features and trading",
-      action: () => {
-        if (!isAuthenticated) {
-          setShowAuthModal(true);
-          setAuthMode("register");
-          return;
-        }
-        navigate("/profile");
-      },
+      action: handleConnectWallet, // Use the fixed function here
       color: "from-orange-500 to-red-600",
     },
   ];
 
+  // Rest of your component remains the same...
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -459,7 +455,7 @@ const Home = () => {
             {!user?.walletAddress && (
               <div className="max-w-md mx-auto">
                 <button
-                  onClick={() => navigate("/profile")}
+                  onClick={handleConnectWallet} // Use the fixed function here too
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 px-6 py-3 rounded-lg text-white font-bold transition-all flex items-center justify-center space-x-2"
                 >
                   <Shield className="w-5 h-5" />

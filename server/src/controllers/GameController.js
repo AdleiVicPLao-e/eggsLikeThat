@@ -3,6 +3,20 @@ import { DatabaseService } from "../services/DatabaseService.js";
 import { serverRNGService } from "../services/RNGService.js";
 import { rewardService } from "../services/RewardService.js";
 import { mailService } from "../services/MailService.js";
+import {
+  scheduleRounds,
+  evaluateTurn,
+  generateSmartAttack,
+  recoverPokemon,
+  validateBattleTeam,
+  calculateBattleRewards,
+  getEffectiveStats,
+  canUseAbility,
+  useAbility,
+  processCooldowns,
+  processStatusEffects,
+} from "../config/battleLogic.js";
+import { ALL_ABILITIES, isOnePlacementTechnique } from "../utils/constants.js";
 import logger from "../utils/logger.js";
 
 const dbService = new DatabaseService();
@@ -112,14 +126,15 @@ export const GameController = {
     }
   },
 
-  // Start a battle
+  // Start a battle with new round-robin system - UPDATED for ONE PLACEMENT
   async startBattle(req, res) {
     try {
       const userId = req.user.id;
-      const {
+      let {
         petIds,
         battleMode = "pve",
         opponentDifficulty = "medium",
+        maxPets = 3,
       } = req.body;
 
       const user = await dbService.findUserById(userId);
@@ -131,9 +146,10 @@ export const GameController = {
       }
 
       // Validate user's pets
-      const userPets = user.petIds.filter((pet) =>
-        petIds.includes(pet._id.toString())
-      );
+      const userPets = user.pets
+        .filter((pet) => petIds.includes(pet.id))
+        .slice(0, maxPets);
+
       if (userPets.length === 0) {
         return res.status(400).json({
           success: false,
@@ -141,28 +157,83 @@ export const GameController = {
         });
       }
 
-      // Generate opponent
-      const opponentPets = await this.generateOpponentPets(
-        opponentDifficulty,
-        userPets
+      // Check for ONE PLACEMENT technique - UPDATED LOGIC
+      const onePlacementPets = userPets.filter(
+        (pet) => pet.technique && isOnePlacementTechnique(pet.technique)
       );
-      const battleResult = this.simulateBattle(userPets, opponentPets);
 
-      // Apply rewards
+      // If any pet has one placement technique, user can only use that ONE pet
+      if (onePlacementPets.length > 0) {
+        if (userPets.length > 1) {
+          return res.status(400).json({
+            success: false,
+            message: `Pet "${onePlacementPets[0].name}" has ${onePlacementPets[0].technique} technique (ONE PLACEMENT) and must battle alone. Please send only this pet to battle.`,
+          });
+        }
+
+        // If user sent only the one placement pet, adjust opponent team to 1 pet
+        maxPets = 1;
+      }
+
+      // Use validateBattleTeam from battleLogic
+      const teamValidation = validateBattleTeam(userPets);
+      if (!teamValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: teamValidation.error,
+        });
+      }
+
+      // Generate opponent team with abilities - UPDATED to respect one placement
+      const opponentPets = await this.generateOpponentTeam(
+        opponentDifficulty,
+        userPets,
+        maxPets // Now respects the one placement limit
+      );
+
+      // Convert pets to battle format
+      const playerTeam = this.convertPetsToBattleFormat(
+        userPets,
+        user.username
+      );
+      const opponentTeam = this.convertPetsToBattleFormat(
+        opponentPets,
+        `${opponentDifficulty} Opponent`
+      );
+
+      // Simulate round-robin battle using scheduleRounds
+      const battleResult = await this.simulateRoundRobinBattle(
+        playerTeam,
+        opponentTeam,
+        battleMode
+      );
+
+      // Apply rewards using calculateBattleRewards
       const opponentLevel = this.getOpponentLevel(
         opponentDifficulty,
         user.level
       );
-      const rewardResult = await rewardService.applyBattleRewards(
-        userId,
-        battleResult,
-        user.level,
-        opponentLevel
+
+      // Calculate base rewards
+      const baseReward = this.calculateBaseBattleRewards(
+        opponentLevel,
+        battleResult.winner === "player",
+        battleMode,
+        userPets.length // Pass team size for reward calculation
       );
 
-      if (!rewardResult.success) {
-        throw new Error(
-          `Failed to apply battle rewards: ${rewardResult.error}`
+      // Use calculateBattleRewards from battleLogic for technique bonuses
+      const winningPets = battleResult.winner === "player" ? userPets : [];
+      const enhancedRewards = calculateBattleRewards(baseReward, winningPets);
+
+      // Update user stats
+      if (enhancedRewards.coins > 0) {
+        await dbService.updateUserBalance(userId, enhancedRewards.coins);
+      }
+      if (enhancedRewards.experience > 0) {
+        await dbService.updateUserExperience(
+          userId,
+          enhancedRewards.experience
         );
       }
 
@@ -175,15 +246,35 @@ export const GameController = {
       }
       await dbService.updateUser(userId, updateData);
 
-      // Update pet battle stats
+      // Update pet battle stats and experience
       for (const pet of userPets) {
-        const petUpdate = {};
-        if (battleResult.winner === "player") {
-          petUpdate.battlesWon = (pet.battlesWon || 0) + 1;
-        } else {
-          petUpdate.battlesLost = (pet.battlesLost || 0) + 1;
+        const petWins = battleResult.battleLog.filter(
+          (match) =>
+            match.playerPet === pet.id && match.result.winner === "player"
+        ).length;
+
+        const petUpdate = {
+          battlesWon: (pet.battlesWon || 0) + petWins,
+          battlesLost:
+            (pet.battlesLost || 0) + (battleResult.totalRounds - petWins),
+          experience:
+            (pet.experience || 0) +
+            Math.floor(enhancedRewards.experience / userPets.length),
+          updatedAt: new Date(),
+        };
+
+        // Check for pet level up
+        const levelUpResult = await this.checkPetLevelUp({
+          ...pet,
+          ...petUpdate,
+        });
+        if (levelUpResult.leveledUp) {
+          petUpdate.level = levelUpResult.newLevel;
+          petUpdate.stats = levelUpResult.newStats;
+          petUpdate.experience = petUpdate.experience - levelUpResult.expNeeded;
         }
-        await dbService.updatePet(pet._id, petUpdate);
+
+        await dbService.updatePet(pet.id, petUpdate);
       }
 
       // Save battle history
@@ -191,9 +282,12 @@ export const GameController = {
         userId,
         result: battleResult.winner === "player" ? "victory" : "defeat",
         opponent: `${opponentDifficulty} Opponent`,
-        userPets: userPets.map((pet) => pet._id),
-        rewards: rewardResult.rewards,
+        userPets: userPets.map((pet) => pet.id),
+        opponentPets: opponentPets.map((pet) => pet.id),
+        rewards: enhancedRewards,
         battleData: battleResult,
+        battleType: "round_robin",
+        onePlacementUsed: onePlacementPets.length > 0,
       });
 
       // Send email notification
@@ -202,12 +296,14 @@ export const GameController = {
           await mailService.sendBattleResults(
             user,
             battleResult,
-            rewardResult.rewards
+            enhancedRewards
           );
         } catch (emailError) {
           logger.warn("Failed to send battle results email:", emailError);
         }
       }
+
+      const updatedUser = await dbService.findUserById(userId);
 
       const responseData = {
         success: true,
@@ -215,25 +311,34 @@ export const GameController = {
           battle: {
             result: battleResult,
             userPets: userPets.map((pet) => ({
-              id: pet._id,
+              id: pet.id,
               name: pet.name,
               type: pet.type,
               rarity: pet.rarity,
-              stats: pet.stats,
+              stats: getEffectiveStats(pet),
               level: pet.level,
               battlesWon: pet.battlesWon || 0,
               battlesLost: pet.battlesLost || 0,
+              ability: pet.ability,
+              technique: pet.technique,
+              isOnePlacement: isOnePlacementTechnique(pet.technique),
             })),
-            opponentPets,
+            opponentPets: opponentPets.map((pet) => ({
+              name: pet.name,
+              type: pet.type,
+              rarity: pet.rarity,
+              level: pet.level,
+              ability: pet.ability,
+            })),
+            onePlacementRule: onePlacementPets.length > 0,
           },
-          rewards: rewardResult.rewards,
+          rewards: enhancedRewards,
           user: {
-            balance: user.balance + (rewardResult.rewards?.coins || 0),
-            experience:
-              user.experience + (rewardResult.rewards?.experience || 0),
-            level: user.level,
-            battlesWon: updateData.battlesWon || user.battlesWon,
-            battlesLost: updateData.battlesLost || user.battlesLost,
+            balance: updatedUser.balance,
+            experience: updatedUser.experience,
+            level: updatedUser.level,
+            battlesWon: updatedUser.battlesWon,
+            battlesLost: updatedUser.battlesLost,
           },
         },
       };
@@ -248,17 +353,452 @@ export const GameController = {
     }
   },
 
-  // Get battle history
+  // New round-robin battle simulation using scheduleRounds
+  async simulateRoundRobinBattle(playerTeam, opponentTeam, battleMode) {
+    const battleLog = [];
+    let playerWins = 0;
+    let opponentWins = 0;
+
+    // Use scheduleRounds from battleLogic for proper scheduling
+    const numPlayers = Math.max(playerTeam.length, opponentTeam.length);
+    const schedule = scheduleRounds(numPlayers);
+
+    for (const match of schedule) {
+      const playerIndex = match.match[0] % playerTeam.length;
+      const opponentIndex = match.match[1] % opponentTeam.length;
+
+      const playerPet = playerTeam[playerIndex];
+      const opponentPet = opponentTeam[opponentIndex];
+
+      if (!playerPet || !opponentPet) continue;
+
+      // Convert to battle format
+      const playerTrainer = {
+        id: `player_${playerPet.id}`,
+        playerName: "Player",
+        pet: this.convertPetToBattleFormat(playerPet),
+      };
+
+      const opponentTrainer = {
+        id: `opponent_${opponentPet.id}`,
+        playerName: "Opponent",
+        pet: this.convertPetToBattleFormat(opponentPet),
+      };
+
+      let matchResult;
+
+      if (battleMode === "pve") {
+        // Simulate AI battle using evaluateTurn
+        matchResult = await this.simulatePetBattle(
+          playerTrainer,
+          opponentTrainer
+        );
+      } else {
+        // For PvP, we'd need player input - for now use AI
+        matchResult = await this.simulatePetBattle(
+          playerTrainer,
+          opponentTrainer
+        );
+      }
+
+      battleLog.push({
+        round: match.round,
+        playerPet: playerPet.id,
+        opponentPet: opponentPet.id,
+        result: matchResult,
+      });
+
+      if (matchResult.winner === "player") {
+        playerWins++;
+      } else if (matchResult.winner === "opponent") {
+        opponentWins++;
+      }
+
+      // Heal pets for next match using recoverPokemon
+      recoverPokemon(playerTrainer.pet, opponentTrainer.pet);
+    }
+
+    const overallWinner =
+      playerWins > opponentWins
+        ? "player"
+        : opponentWins > playerWins
+        ? "opponent"
+        : "draw";
+
+    return {
+      winner: overallWinner,
+      playerWins,
+      opponentWins,
+      totalRounds: schedule.length,
+      battleLog,
+      schedule,
+    };
+  },
+
+  // Simulate individual pet battle using evaluateTurn - UPDATED to use useAbility
+  async simulatePetBattle(playerTrainer, opponentTrainer) {
+    const turns = [];
+    let currentPlayer = playerTrainer;
+    let currentOpponent = opponentTrainer;
+
+    while (
+      currentPlayer.pet.currentHP > 0 &&
+      currentOpponent.pet.currentHP > 0
+    ) {
+      const playerAction = this.generatePetAction(
+        currentPlayer.pet,
+        currentOpponent.pet
+      );
+      const opponentAction = this.generatePetAction(
+        currentOpponent.pet,
+        currentPlayer.pet
+      );
+
+      // Use evaluateTurn from battleLogic
+      const battleResult = evaluateTurn(currentPlayer, currentOpponent, {
+        playerAction,
+        opponentAction,
+        result: this.determineBattleResult(playerAction, opponentAction),
+      });
+
+      turns.push({
+        turn: turns.length + 1,
+        playerAction,
+        opponentAction,
+        result: battleResult.result,
+        playerHP: currentPlayer.pet.currentHP,
+        opponentHP: currentOpponent.pet.currentHP,
+        damage: battleResult.damage,
+        abilityUsed: battleResult.abilityUsed,
+        statusEffects: {
+          player: [...currentPlayer.pet.statusEffects],
+          opponent: [...currentOpponent.pet.statusEffects],
+        },
+      });
+
+      // Update trainers with new health and status
+      currentPlayer = battleResult.player;
+      currentOpponent = battleResult.opponent;
+
+      // Process cooldowns and status effects
+      processCooldowns(currentPlayer.pet);
+      processCooldowns(currentOpponent.pet);
+      processStatusEffects(currentPlayer.pet);
+      processStatusEffects(currentOpponent.pet);
+
+      // Add small delay for realism
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const winner = currentPlayer.pet.currentHP > 0 ? "player" : "opponent";
+
+    return {
+      winner,
+      turns,
+      finalPlayerHP: currentPlayer.pet.currentHP,
+      finalOpponentHP: currentOpponent.pet.currentHP,
+      playerPet: currentPlayer.pet,
+      opponentPet: currentOpponent.pet,
+    };
+  },
+
+  // Determine battle result based on actions
+  determineBattleResult(playerAction, opponentAction) {
+    const actionMatrix = {
+      attack: {
+        attack: "both damaged",
+        defend: "win",
+        parry: "lose",
+        ability: "win",
+      },
+      defend: {
+        attack: "lose",
+        defend: "tie",
+        parry: "win",
+        ability: "lose",
+      },
+      parry: {
+        attack: "win",
+        defend: "lose",
+        parry: "both damaged",
+        ability: "win",
+      },
+      ability: {
+        attack: "lose",
+        defend: "win",
+        parry: "lose",
+        ability: "both damaged",
+      },
+    };
+
+    return actionMatrix[playerAction]?.[opponentAction] || "both damaged";
+  },
+
+  // Generate smart action for pets considering abilities using canUseAbility - FIXED
+  generatePetAction(pet, opponentPet) {
+    // If pet has ability and it's a good time to use it
+    if (pet.ability && this.shouldUseAbility(pet, opponentPet)) {
+      const ability = ALL_ABILITIES[pet.ability];
+      // Use the ability immediately when decision is made
+      useAbility(pet, ability);
+      return "ability";
+    }
+
+    // Otherwise use smart AI decision
+    return generateSmartAttack(pet, opponentPet);
+  },
+
+  // Determine if pet should use its ability using canUseAbility - FIXED
+  shouldUseAbility(pet, opponentPet) {
+    const ability = ALL_ABILITIES[pet.ability];
+    if (!ability) return false;
+
+    // Check cooldown using canUseAbility from battleLogic
+    if (!canUseAbility(pet, ability)) {
+      return false;
+    }
+
+    const useChance = Math.random();
+
+    // Higher chance to use ability when:
+    // - Opponent is weak
+    // - Pet is low on health (for healing abilities)
+    // - Based on ability type
+
+    if (ability.type === "SUPPORT" && pet.currentHP < pet.stats.hp * 0.4) {
+      return useChance < 0.7; // 70% chance to use healing when low
+    }
+
+    if (
+      ability.type === "OFFENSIVE" &&
+      opponentPet.currentHP < opponentPet.stats.hp * 0.3
+    ) {
+      return useChance < 0.6; // 60% chance to finish with ability
+    }
+
+    // Default chance to use ability
+    return useChance < 0.3; // 30% chance normally
+  },
+
+  // Calculate base battle rewards - UPDATED to consider team size
+  calculateBaseBattleRewards(
+    opponentLevel,
+    isVictory,
+    battleMode,
+    teamSize = 3
+  ) {
+    const baseCoins = opponentLevel * 10 * (teamSize / 3); // Scale rewards by team size
+    const baseExp = opponentLevel * 5 * (teamSize / 3);
+
+    if (!isVictory) {
+      return {
+        coins: Math.floor(baseCoins * 0.3), // 30% for loss
+        experience: Math.floor(baseExp * 0.3),
+      };
+    }
+
+    const multiplier = battleMode === "pvp" ? 1.5 : 1.0;
+
+    return {
+      coins: Math.floor(baseCoins * multiplier),
+      experience: Math.floor(baseExp * multiplier),
+    };
+  },
+
+  // Convert blockchain pet to battle format using getEffectiveStats
+  convertPetToBattleFormat(pet) {
+    return {
+      id: pet.id,
+      name: pet.name,
+      type: pet.type,
+      rarity: pet.rarity,
+      ability: pet.ability,
+      technique: pet.technique,
+      techniqueLevel: pet.techniqueLevel || 1,
+      level: pet.level || 1,
+      stats: getEffectiveStats(pet), // Use effective stats with technique multipliers
+      currentHP: pet.currentHP || pet.stats.hp,
+      statusEffects: pet.statusEffects || [],
+      isAlive: pet.isAlive !== false,
+      abilityCooldowns: pet.abilityCooldowns || {},
+    };
+  },
+
+  // Convert multiple pets to battle format
+  convertPetsToBattleFormat(pets, trainerName) {
+    return pets.map((pet, index) => ({
+      id: pet.id,
+      name: pet.name,
+      type: pet.type,
+      rarity: pet.rarity,
+      ability: pet.ability,
+      technique: pet.technique,
+      techniqueLevel: pet.techniqueLevel || 1,
+      level: pet.level || 1,
+      stats: pet.stats || {},
+      currentHP: pet.currentHP || pet.stats.hp,
+      statusEffects: pet.statusEffects || [],
+      isAlive: pet.isAlive !== false,
+      trainerName,
+      position: index + 1,
+    }));
+  },
+
+  // Generate opponent team with abilities and techniques - UPDATED for one placement
+  async generateOpponentTeam(difficulty, userPets, maxPets) {
+    const difficulties = {
+      easy: { levelMultiplier: 0.7, rarity: "common" },
+      medium: { levelMultiplier: 1.0, rarity: "uncommon" },
+      hard: { levelMultiplier: 1.3, rarity: "rare" },
+      epic: { levelMultiplier: 1.6, rarity: "epic" },
+    };
+
+    const config = difficulties[difficulty] || difficulties.medium;
+    const opponentPets = [];
+
+    // If user has one placement pet, opponent also gets 1 pet
+    const teamSize = Math.min(userPets.length, maxPets);
+
+    const avgUserLevel =
+      userPets.reduce((sum, pet) => sum + (pet.level || 1), 0) /
+      userPets.length;
+
+    for (let i = 0; i < teamSize; i++) {
+      const opponentPet = serverRNGService.generatePet();
+
+      // Scale opponent pet based on difficulty
+      opponentPet.level = Math.max(
+        1,
+        Math.round(avgUserLevel * config.levelMultiplier)
+      );
+      opponentPet.rarity = config.rarity;
+
+      // Enhance stats based on difficulty
+      if (opponentPet.stats) {
+        Object.keys(opponentPet.stats).forEach((stat) => {
+          opponentPet.stats[stat] = Math.round(
+            opponentPet.stats[stat] * config.levelMultiplier
+          );
+        });
+      }
+
+      // Add random ability based on type
+      const typeAbilities = Object.values(ALL_ABILITIES).filter(
+        (ability) => ability.element === opponentPet.type?.toUpperCase()
+      );
+      if (typeAbilities.length > 0) {
+        const randomAbility =
+          typeAbilities[Math.floor(Math.random() * typeAbilities.length)];
+        opponentPet.ability = randomAbility.id;
+      }
+
+      opponentPets.push(opponentPet);
+    }
+
+    return opponentPets;
+  },
+
+  // NEW: Validate team composition before battle
+  validateTeamComposition(userPets) {
+    const onePlacementPets = userPets.filter(
+      (pet) => pet.technique && isOnePlacementTechnique(pet.technique)
+    );
+
+    if (onePlacementPets.length > 0 && userPets.length > 1) {
+      return {
+        valid: false,
+        error: `Cannot use multiple pets when "${onePlacementPets[0].name}" has ONE PLACEMENT technique ${onePlacementPets[0].technique}`,
+        onePlacementPet: onePlacementPets[0],
+      };
+    }
+
+    return { valid: true };
+  },
+
+  // NEW: Get available pets for battle (respecting one placement)
+  async getAvailableBattlePets(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const availablePets = user.pets.map((pet) => ({
+        id: pet.id,
+        name: pet.name,
+        type: pet.type,
+        rarity: pet.rarity,
+        level: pet.level,
+        ability: pet.ability,
+        technique: pet.technique,
+        isOnePlacement: pet.technique
+          ? isOnePlacementTechnique(pet.technique)
+          : false,
+        stats: getEffectiveStats(pet),
+      }));
+
+      // Check if user has any one placement pets
+      const onePlacementPets = availablePets.filter(
+        (pet) => pet.isOnePlacement
+      );
+
+      res.json({
+        success: true,
+        data: {
+          pets: availablePets,
+          onePlacementPets: onePlacementPets,
+          maxTeamSize: onePlacementPets.length > 0 ? 1 : 3,
+          rules: {
+            onePlacement:
+              "Pets with ONE PLACEMENT techniques must battle alone",
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get available battle pets error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get battle history with enhanced details
   async getBattleHistory(req, res) {
     try {
       const userId = req.user.id;
       const battleHistory = await dbService.getUserBattleHistory(userId);
 
+      // Enhance with round-robin details
+      const enhancedHistory = battleHistory.map((battle) => {
+        if (battle.battleType === "round_robin" && battle.battleData) {
+          return {
+            ...battle,
+            detailedResults: {
+              totalRounds: battle.battleData.totalRounds,
+              playerWins: battle.battleData.playerWins,
+              opponentWins: battle.battleData.opponentWins,
+              individualMatches: battle.battleData.battleLog,
+            },
+          };
+        }
+        return battle;
+      });
+
       const summary = {
-        totalBattles: battleHistory.length,
-        victories: battleHistory.filter((b) => b.result === "victory").length,
-        defeats: battleHistory.filter((b) => b.result === "defeat").length,
+        totalBattles: enhancedHistory.length,
+        victories: enhancedHistory.filter((b) => b.result === "victory").length,
+        defeats: enhancedHistory.filter((b) => b.result === "defeat").length,
+        roundRobinBattles: enhancedHistory.filter(
+          (b) => b.battleType === "round_robin"
+        ).length,
       };
+
       summary.winRate =
         summary.totalBattles > 0
           ? ((summary.victories / summary.totalBattles) * 100).toFixed(1)
@@ -267,7 +807,7 @@ export const GameController = {
       res.json({
         success: true,
         data: {
-          battles: battleHistory,
+          battles: enhancedHistory,
           summary,
         },
       });
@@ -311,9 +851,9 @@ export const GameController = {
           difficulty: "easy",
           description: "Hatch 3 pets",
           reward: { coins: 150, experience: 75 },
-          progress: user.petIds?.length || 0,
+          progress: user.pets?.length || 0,
           target: 3,
-          completed: (user.petIds?.length || 0) >= 3,
+          completed: (user.pets?.length || 0) >= 3,
         },
         {
           id: "win_5_battles",
@@ -352,7 +892,7 @@ export const GameController = {
     }
   },
 
-  // Complete a quest
+  // Complete a quest with proper RewardService integration
   async completeQuest(req, res) {
     try {
       const userId = req.user.id;
@@ -388,6 +928,7 @@ export const GameController = {
         });
       }
 
+      // Use RewardService for quest rewards
       const rewardResult = await rewardService.applyQuestRewards(
         userId,
         quest.difficulty,
@@ -504,7 +1045,7 @@ export const GameController = {
     }
   },
 
-  // Claim daily reward
+  // Claim daily reward with proper RewardService integration
   async claimDailyReward(req, res) {
     try {
       const userId = req.user.id;
@@ -535,6 +1076,7 @@ export const GameController = {
         ? consecutiveDays + 1
         : consecutiveDays;
 
+      // Use RewardService for daily rewards
       const rewardResult = await rewardService.applyDailyRewards(
         userId,
         currentConsecutiveDays,
@@ -643,7 +1185,7 @@ export const GameController = {
         });
       }
 
-      const pet = user.petIds.find((p) => p._id.toString() === petId);
+      const pet = user.pets.find((p) => p.id.toString() === petId);
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -671,7 +1213,7 @@ export const GameController = {
         message: `${pet.name} leveled up to level ${levelUpResult.newLevel}!`,
         data: {
           pet: {
-            id: pet._id,
+            id: pet.id,
             name: pet.name,
             level: levelUpResult.newLevel,
             stats: levelUpResult.newStats,
@@ -702,7 +1244,7 @@ export const GameController = {
         });
       }
 
-      const pet = user.petIds.find((p) => p._id.toString() === petId);
+      const pet = user.pets.find((p) => p.id.toString() === petId);
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -725,7 +1267,7 @@ export const GameController = {
         message: `${pet.name} evolved into ${evolutionResult.name}!`,
         data: {
           pet: {
-            id: pet._id,
+            id: pet.id,
             name: evolutionResult.name,
             evolutionStage: evolutionResult.evolutionStage,
             stats: evolutionResult.stats,
@@ -759,7 +1301,7 @@ export const GameController = {
     }
   },
 
-  // Helper methods (keep the same as before)
+  // Helper methods
   getOpponentLevel(difficulty, userLevel) {
     const multipliers = {
       easy: 0.8,
@@ -815,79 +1357,6 @@ export const GameController = {
     };
   },
 
-  async generateOpponentPets(difficulty, userPets) {
-    const difficulties = {
-      easy: { levelMultiplier: 0.8 },
-      medium: { levelMultiplier: 1.0 },
-      hard: { levelMultiplier: 1.2 },
-    };
-
-    const config = difficulties[difficulty] || difficulties.medium;
-    const opponentPets = [];
-    const petCount = Math.floor(Math.random() * 3) + 1;
-
-    for (let i = 0; i < petCount; i++) {
-      const petData = serverRNGService.generatePet();
-      const avgUserLevel =
-        userPets.reduce((sum, pet) => sum + (pet.level || 1), 0) /
-        userPets.length;
-
-      opponentPets.push({
-        name: petData.name,
-        rarity: petData.rarity,
-        type: petData.type,
-        ability: petData.ability,
-        stats: petData.stats,
-        level: Math.max(1, Math.round(avgUserLevel * config.levelMultiplier)),
-      });
-    }
-
-    return opponentPets;
-  },
-
-  simulateBattle(userPets, opponentPets) {
-    let playerPower = 0;
-    let opponentPower = 0;
-
-    userPets.forEach((pet) => {
-      playerPower += this.calculatePetPower(pet);
-    });
-
-    opponentPets.forEach((pet) => {
-      opponentPower += this.calculatePetPower(pet);
-    });
-
-    playerPower *= 0.8 + Math.random() * 0.4;
-    opponentPower *= 0.8 + Math.random() * 0.4;
-
-    const winner = playerPower > opponentPower ? "player" : "opponent";
-
-    return {
-      winner,
-      playerPower: Math.round(playerPower),
-      opponentPower: Math.round(opponentPower),
-      margin:
-        Math.abs(playerPower - opponentPower) /
-        Math.max(playerPower, opponentPower),
-      victory: winner === "player",
-    };
-  },
-
-  calculatePetPower(pet) {
-    const basePower = (pet.stats.dmg + pet.stats.hp) * 0.5;
-    const levelBonus = (pet.level || 1) * 10;
-    const rarityMultiplier =
-      {
-        common: 1.0,
-        uncommon: 1.2,
-        rare: 1.5,
-        epic: 2.0,
-        legendary: 3.0,
-      }[pet.rarity] || 1.0;
-
-    return basePower * rarityMultiplier + levelBonus;
-  },
-
   getQuestById(questId) {
     const quests = {
       beginner_battle: {
@@ -919,7 +1388,7 @@ export const GameController = {
       case "beginner_battle":
         return (user.battlesWon || 0) + (user.battlesLost || 0) > 0;
       case "hatch_3_pets":
-        return (user.petIds?.length || 0) >= 3;
+        return (user.pets?.length || 0) >= 3;
       case "win_5_battles":
         return (user.battlesWon || 0) >= 5;
       case "reach_level_10":
