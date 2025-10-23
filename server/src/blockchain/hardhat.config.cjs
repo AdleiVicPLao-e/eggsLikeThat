@@ -1,5 +1,5 @@
 // hardhat.config.cjs
-require("@nomiclabs/hardhat-waffle");
+require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
 module.exports = {
@@ -46,5 +46,15 @@ module.exports = {
   },
   mocha: {
     timeout: 40000,
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS !== undefined,
+    currency: "USD",
+  },
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY || "",
+      polygonAmoy: process.env.POLYGONSCAN_API_KEY || "",
+    },
   },
 };

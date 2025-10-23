@@ -105,9 +105,6 @@ const server = app.listen(PORT, async () => {
   logger.info(`🌍 Environment: ${config.NODE_ENV}`);
   logger.info(`🔗 Client URL: ${config.CLIENT_URL}`);
   logger.info(`📊 API available at: http://localhost:${PORT}/api`);
-
-  // Initialize sample data after server starts
-  await initializeSampleData();
 });
 
 // Graceful shutdown

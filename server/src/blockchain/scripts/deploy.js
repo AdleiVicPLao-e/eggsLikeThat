@@ -13,7 +13,7 @@ async function main() {
   console.log("Deployer address:", deployer.address);
   console.log(
     "Deployer balance:",
-    ethers.utils.formatEther(await deployer.getBalance()),
+    ethers.formatEther(await deployer.provider.getBalance(deployer.address)), // Fixed for ethers v6
     "ETH"
   );
 
@@ -35,49 +35,54 @@ async function main() {
   // Deploy PetNFT Contract
   console.log("\n📦 Deploying PetNFT...");
   const PetNFT = await ethers.getContractFactory("PetNFT");
-  const petNFT = await PetNFT.deploy(baseURIs.pets); // Add baseURI parameter
-  await petNFT.deployed();
-  console.log("✅ PetNFT deployed to:", petNFT.address);
+  const petNFT = await PetNFT.deploy(baseURIs.pets);
+  await petNFT.waitForDeployment(); // Changed from deployed() in ethers v6
+  const petNFTAddress = await petNFT.getAddress();
+  console.log("✅ PetNFT deployed to:", petNFTAddress);
 
   // Deploy EggNFT Contract
   console.log("\n🥚 Deploying EggNFT...");
   const EggNFT = await ethers.getContractFactory("EggNFT");
-  const eggNFT = await EggNFT.deploy(baseURIs.eggs); // Add baseURI parameter
-  await eggNFT.deployed();
-  console.log("✅ EggNFT deployed to:", eggNFT.address);
+  const eggNFT = await EggNFT.deploy(baseURIs.eggs);
+  await eggNFT.waitForDeployment();
+  const eggNFTAddress = await eggNFT.getAddress();
+  console.log("✅ EggNFT deployed to:", eggNFTAddress);
 
   // Deploy SkinNFT Contract
   console.log("\n🎨 Deploying SkinNFT...");
   const SkinNFT = await ethers.getContractFactory("SkinNFT");
-  const skinNFT = await SkinNFT.deploy(baseURIs.skins); // Add baseURI parameter
-  await skinNFT.deployed();
-  console.log("✅ SkinNFT deployed to:", skinNFT.address);
+  const skinNFT = await SkinNFT.deploy(baseURIs.skins);
+  await skinNFT.waitForDeployment();
+  const skinNFTAddress = await skinNFT.getAddress();
+  console.log("✅ SkinNFT deployed to:", skinNFTAddress);
 
   // Deploy TechniqueNFT Contract
   console.log("\n🔮 Deploying TechniqueNFT...");
   const TechniqueNFT = await ethers.getContractFactory("TechniqueNFT");
-  const techniqueNFT = await TechniqueNFT.deploy(baseURIs.techniques); // Add baseURI parameter
-  await techniqueNFT.deployed();
-  console.log("✅ TechniqueNFT deployed to:", techniqueNFT.address);
+  const techniqueNFT = await TechniqueNFT.deploy(baseURIs.techniques);
+  await techniqueNFT.waitForDeployment();
+  const techniqueNFTAddress = await techniqueNFT.getAddress();
+  console.log("✅ TechniqueNFT deployed to:", techniqueNFTAddress);
 
   // Deploy Marketplace Contract
   console.log("\n🏪 Deploying Marketplace...");
   const Marketplace = await ethers.getContractFactory("Marketplace");
   const platformFee = 250; // 2.5% platform fee (basis points)
   const marketplace = await Marketplace.deploy(platformWallet);
-  await marketplace.deployed();
-  console.log("✅ Marketplace deployed to:", marketplace.address);
+  await marketplace.waitForDeployment();
+  const marketplaceAddress = await marketplace.getAddress();
+  console.log("✅ Marketplace deployed to:", marketplaceAddress);
 
   // Save contract addresses to JSON file
   const contracts = {
-    petNFT: petNFT.address,
-    eggNFT: eggNFT.address,
-    skinNFT: skinNFT.address,
-    techniqueNFT: techniqueNFT.address,
-    marketplace: marketplace.address,
+    petNFT: petNFTAddress,
+    eggNFT: eggNFTAddress,
+    skinNFT: skinNFTAddress,
+    techniqueNFT: techniqueNFTAddress,
+    marketplace: marketplaceAddress,
     network: {
       name: network.name,
-      chainId: network.chainId,
+      chainId: Number(network.chainId), // Convert BigInt to Number
     },
     platform: {
       wallet: platformWallet,
@@ -119,12 +124,12 @@ async function main() {
 
   // Generate frontend environment file
   const envTemplate = `# Contract Addresses for ${network.name.toUpperCase()}
-VITE_PET_NFT_CONTRACT=${petNFT.address}
-VITE_EGG_NFT_CONTRACT=${eggNFT.address}
-VITE_SKIN_NFT_CONTRACT=${skinNFT.address}
-VITE_TECHNIQUE_NFT_CONTRACT=${techniqueNFT.address}
-VITE_MARKETPLACE_CONTRACT=${marketplace.address}
-VITE_NETWORK_CHAIN_ID=${network.chainId}
+VITE_PET_NFT_CONTRACT=${petNFTAddress}
+VITE_EGG_NFT_CONTRACT=${eggNFTAddress}
+VITE_SKIN_NFT_CONTRACT=${skinNFTAddress}
+VITE_TECHNIQUE_NFT_CONTRACT=${techniqueNFTAddress}
+VITE_MARKETPLACE_CONTRACT=${marketplaceAddress}
+VITE_NETWORK_CHAIN_ID=${Number(network.chainId)}
 VITE_PLATFORM_WALLET=${platformWallet}
 
 # Base URIs for metadata
@@ -134,35 +139,34 @@ VITE_SKINS_BASE_URI=${baseURIs.skins}
 VITE_TECHNIQUES_BASE_URI=${baseURIs.techniques}
 
 # Blockchain RPC URLs
-VITE_ETH_SEPOLIA_RPC_URL=${process.env.ETH_SEPOLIA_RPC_URL}
-VITE_POLYGON_AMOY_RPC_URL=${process.env.POLYGON_AMOY_TESTNET_RPC_URL}
+VITE_ETH_SEPOLIA_RPC_URL=${process.env.ETH_SEPOLIA_RPC_URL || ""}
+VITE_POLYGON_AMOY_RPC_URL=${process.env.POLYGON_AMOY_TESTNET_RPC_URL || ""}
 `;
 
-  fs.writeFileSync(
-    path.join(__dirname, "../../../../client/.env.local"),
-    envTemplate
-  );
+  const clientEnvPath = path.join(__dirname, "../../../../client/.env.local");
+  const clientDir = path.dirname(clientEnvPath);
+
+  if (!fs.existsSync(clientDir)) {
+    fs.mkdirSync(clientDir, { recursive: true });
+  }
+
+  fs.writeFileSync(clientEnvPath, envTemplate);
   console.log("📄 Frontend environment file saved to: client/.env.local");
 
   console.log("\n🎉 Deployment completed successfully!");
   console.log("\n📊 Deployment Summary:");
-  console.log("   🐾 PetNFT:", petNFT.address);
-  console.log("   🥚 EggNFT:", eggNFT.address);
-  console.log("   🎨 SkinNFT:", skinNFT.address);
-  console.log("   🔮 TechniqueNFT:", techniqueNFT.address);
-  console.log("   🏪 Marketplace:", marketplace.address);
+  console.log("   🐾 PetNFT:", petNFTAddress);
+  console.log("   🥚 EggNFT:", eggNFTAddress);
+  console.log("   🎨 SkinNFT:", skinNFTAddress);
+  console.log("   🔮 TechniqueNFT:", techniqueNFTAddress);
+  console.log("   🏪 Marketplace:", marketplaceAddress);
   console.log("   💼 Platform Wallet:", platformWallet);
   console.log("   🌐 Network:", network.name, `(Chain ID: ${network.chainId})`);
   console.log("   📁 Contract Path: ./artifacts/contracts");
 
-  console.log("\n⚠️  IMPORTANT: Your deployer balance is 0 ETH");
-  console.log(
-    "   You need to fund your wallet with testnet MATIC to deploy contracts"
-  );
-  console.log("   Wallet address:", deployer.address);
-  console.log(
-    "\n📝 Get testnet MATIC from: https://faucet.polygon.technology/"
-  );
+  console.log("\n⚠️  IMPORTANT: Make sure your Hardhat node is running!");
+  console.log("   Run: npm run node");
+  console.log("   Then run this deployment script again");
 }
 
 main()
