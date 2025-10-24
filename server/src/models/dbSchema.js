@@ -1,5 +1,6 @@
-// src/models/dbSchemas.js
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import { Wallet } from "ethers";
 
 // User Schema
 const userSchema = new mongoose.Schema({
@@ -19,6 +20,7 @@ const userSchema = new mongoose.Schema({
 
   // Game progression
   balance: { type: Number, default: 0 },
+  freeRolls: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
   experience: { type: Number, default: 0 },
   rank: { type: String, default: "Beginner" },
@@ -34,6 +36,9 @@ const userSchema = new mongoose.Schema({
   consecutiveDays: { type: Number, default: 1 },
   lastDailyClaim: { type: Date, default: null },
   lastFreeHatch: { type: Date, default: null },
+
+  // Authentication
+  isGuest: { type: Boolean, default: false },
 
   // Blockchain tracking
   nftTokens: [
@@ -63,6 +68,107 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   lastLogin: { type: Date, default: Date.now },
+});
+
+// Add methods to userSchema
+userSchema.methods.verifyPassword = async function (password) {
+  return await bcrypt.compare(password, this.passwordHash);
+};
+
+userSchema.methods.updateLastLogin = async function () {
+  this.lastLogin = new Date();
+  return await this.save();
+};
+
+userSchema.methods.connectWallet = async function (
+  walletAddress,
+  encryptedPrivateKey = null
+) {
+  this.walletAddress = walletAddress.toLowerCase();
+  if (encryptedPrivateKey) {
+    this.encryptedPrivateKey = encryptedPrivateKey;
+  }
+  this.updatedAt = new Date();
+  return await this.save();
+};
+
+userSchema.methods.addBalance = async function (amount) {
+  this.balance += amount;
+  this.updatedAt = new Date();
+  return await this.save();
+};
+
+userSchema.methods.deductBalance = async function (amount) {
+  if (this.balance < amount) {
+    throw new Error("Insufficient balance");
+  }
+  this.balance -= amount;
+  this.updatedAt = new Date();
+  return await this.save();
+};
+
+userSchema.methods.addFreeRolls = async function (amount) {
+  this.freeRolls += amount;
+  this.updatedAt = new Date();
+  return await this.save();
+};
+
+userSchema.methods.useFreeRoll = async function () {
+  if (this.freeRolls <= 0) {
+    throw new Error("No free rolls available");
+  }
+  this.freeRolls--;
+  this.updatedAt = new Date();
+  return await this.save();
+};
+
+// Add virtual properties
+userSchema.virtual("petsHatched").get(function () {
+  return this.petIds ? this.petIds.length : 0;
+});
+
+userSchema.virtual("totalBattles").get(function () {
+  return (this.battlesWon || 0) + (this.battlesLost || 0);
+});
+
+userSchema.virtual("winRate").get(function () {
+  const total = this.totalBattles;
+  return total > 0 ? ((this.battlesWon || 0) / total) * 100 : 0;
+});
+
+// Add static methods
+userSchema.statics.createWithWallet = async function (
+  username,
+  email,
+  password
+) {
+  const wallet = Wallet.createRandom();
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  return this.create({
+    username,
+    email,
+    passwordHash,
+    walletAddress: wallet.address,
+    encryptedPrivateKey: wallet.privateKey,
+    balance: 1000,
+    freeRolls: 3,
+  });
+};
+
+userSchema.statics.hashPassword = async function (password) {
+  return await bcrypt.hash(password, 12);
+};
+
+// Ensure virtuals are included in JSON output
+userSchema.set("toJSON", {
+  virtuals: true,
+  transform: function (doc, ret) {
+    delete ret.passwordHash;
+    delete ret.encryptedPrivateKey;
+    delete ret.__v;
+    return ret;
+  },
 });
 
 // Pet Schema

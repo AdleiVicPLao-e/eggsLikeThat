@@ -19,6 +19,7 @@ export const UserProvider = ({ children }) => {
   const [authMode, setAuthMode] = useState("login");
   const [apiAvailable, setApiAvailable] = useState(true);
   const [connectionError, setConnectionError] = useState(null);
+  const [guestUsername, setGuestUsername] = useState("");
 
   // Simple health check that doesn't require auth
   const checkApiAvailability = async () => {
@@ -219,6 +220,7 @@ export const UserProvider = ({ children }) => {
         setUser(userData);
         setShowAuthModal(false);
         setApiAvailable(true);
+        setGuestUsername(""); // Clear the username after successful login
 
         return { success: true, user: userData };
       } else {
@@ -236,6 +238,40 @@ export const UserProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Quick guest login with auto-generated username
+  const quickGuestLogin = async () => {
+    const randomUsername = generateRandomUsername();
+    return await guestLogin(randomUsername);
+  };
+
+  // Generate random username for quick guest login
+  const generateRandomUsername = () => {
+    const adjectives = [
+      "Swift",
+      "Brave",
+      "Mighty",
+      "Clever",
+      "Mystic",
+      "Golden",
+      "Silver",
+      "Crystal",
+    ];
+    const nouns = [
+      "Dragon",
+      "Phoenix",
+      "Wolf",
+      "Eagle",
+      "Tiger",
+      "Lion",
+      "Falcon",
+      "Bear",
+    ];
+    const number = Math.floor(Math.random() * 1000);
+    return `${adjectives[Math.floor(Math.random() * adjectives.length)]}${
+      nouns[Math.floor(Math.random() * nouns.length)]
+    }${number}`;
   };
 
   // Logout
@@ -256,6 +292,7 @@ export const UserProvider = ({ children }) => {
       localStorage.removeItem("petverse_user");
       localStorage.removeItem("petverse_token");
       setConnectionError(null);
+      setGuestUsername("");
     }
   };
 
@@ -323,8 +360,8 @@ export const UserProvider = ({ children }) => {
       setShowAuthModal(true);
     },
     playAsGuest: () => {
-      setAuthMode("guest");
-      setShowAuthModal(true);
+      // For quick guest play, generate a random username and login immediately
+      quickGuestLogin();
     },
     connectWallet: () => {
       setAuthMode("register");
@@ -338,6 +375,8 @@ export const UserProvider = ({ children }) => {
     isLoading,
     apiAvailable,
     connectionError,
+    guestUsername,
+    setGuestUsername,
 
     // Authentication state
     isAuthenticated: !!user,
@@ -354,10 +393,12 @@ export const UserProvider = ({ children }) => {
     register,
     login,
     guestLogin,
+    quickGuestLogin,
     logout,
     updateProfile,
     retryConnection,
     quickAuth,
+    generateRandomUsername,
   };
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

@@ -1,6 +1,6 @@
 // client/src/hooks/useGameAPI.jsx
 import { useState, useCallback } from "react";
-import { gameAPI } from "../services/api";
+import { gameAPI, handleApiResponse, handleApiError } from "../services/api";
 
 /**
  * useGameAPI Hook
@@ -22,10 +22,9 @@ export const useGameAPI = (options = {}) => {
       setError(null);
       try {
         const response = await apiCall(...args);
-        return response.data;
+        return handleApiResponse(response);
       } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || err.message || "An error occurred";
+        const errorMessage = handleApiError(err);
         setError(errorMessage);
         if (onError) onError(errorMessage);
         console.error("GameAPI Error:", errorMessage);
@@ -79,6 +78,10 @@ export const useGameAPI = (options = {}) => {
     return data;
   }, [handleRequest, updateUser]);
 
+  const getNonce = useCallback(async () => {
+    return await handleRequest(gameAPI.auth.getNonce);
+  }, [handleRequest]);
+
   // ---------------------------
   // 🥚 Eggs
   // ---------------------------
@@ -91,16 +94,9 @@ export const useGameAPI = (options = {}) => {
     [handleRequest, updateEggs]
   );
 
-  const hatchEgg = useCallback(
-    async (eggId) => {
-      const data = await handleRequest(gameAPI.eggs.hatchEgg, eggId);
-      if (updateUser && data?.data?.user) updateUser(data.data.user);
-      if (updatePets && data?.data?.pets) updatePets(data.data.pets);
-      if (updateEggs && data?.data?.eggs) updateEggs(data.data.eggs);
-      return data;
-    },
-    [handleRequest, updateUser, updatePets, updateEggs]
-  );
+  const getEggCatalog = useCallback(async () => {
+    return await handleRequest(gameAPI.eggs.getEggCatalog);
+  }, [handleRequest]);
 
   const purchaseEgg = useCallback(
     async (purchaseData) => {
@@ -119,6 +115,30 @@ export const useGameAPI = (options = {}) => {
     return data;
   }, [handleRequest, updateUser, updateEggs]);
 
+  const previewEgg = useCallback(
+    async (eggId) => {
+      return await handleRequest(gameAPI.eggs.previewEgg, eggId);
+    },
+    [handleRequest]
+  );
+
+  const hatchEgg = useCallback(
+    async (eggId) => {
+      const data = await handleRequest(gameAPI.eggs.hatchEgg, eggId);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      if (updatePets && data?.data?.pets) updatePets(data.data.pets);
+      if (updateEggs && data?.data?.eggs) updateEggs(data.data.eggs);
+      return data;
+    },
+    [handleRequest, updateUser, updatePets, updateEggs]
+  );
+
+  const syncBlockchainEggs = useCallback(async () => {
+    const data = await handleRequest(gameAPI.eggs.syncBlockchainEggs);
+    if (updateEggs && data?.data?.eggs) updateEggs(data.data.eggs);
+    return data;
+  }, [handleRequest, updateEggs]);
+
   // ---------------------------
   // 🐾 Pets
   // ---------------------------
@@ -129,6 +149,13 @@ export const useGameAPI = (options = {}) => {
       return data;
     },
     [handleRequest, updatePets]
+  );
+
+  const getPetDetails = useCallback(
+    async (petId) => {
+      return await handleRequest(gameAPI.pets.getPetDetails, petId);
+    },
+    [handleRequest]
   );
 
   const upgradePet = useCallback(
@@ -165,6 +192,21 @@ export const useGameAPI = (options = {}) => {
     [handleRequest, updateUser, updatePets]
   );
 
+  const toggleFavorite = useCallback(
+    async (petId) => {
+      const data = await handleRequest(gameAPI.pets.toggleFavorite, petId);
+      if (updatePets && data?.data?.pets) updatePets(data.data.pets);
+      return data;
+    },
+    [handleRequest, updatePets]
+  );
+
+  const syncBlockchainPets = useCallback(async () => {
+    const data = await handleRequest(gameAPI.pets.syncBlockchainPets);
+    if (updatePets && data?.data?.pets) updatePets(data.data.pets);
+    return data;
+  }, [handleRequest, updatePets]);
+
   // ---------------------------
   // 🎮 Game Actions
   // ---------------------------
@@ -176,6 +218,10 @@ export const useGameAPI = (options = {}) => {
     return data;
   }, [handleRequest, updateUser, updateInventory]);
 
+  const getDailyRewardStatus = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getDailyRewardStatus);
+  }, [handleRequest]);
+
   const startBattle = useCallback(
     async (battleData) => {
       const data = await handleRequest(gameAPI.game.startBattle, battleData);
@@ -185,6 +231,17 @@ export const useGameAPI = (options = {}) => {
     },
     [handleRequest, updateUser, updatePets]
   );
+
+  const getBattleHistory = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.game.getBattleHistory, params);
+    },
+    [handleRequest]
+  );
+
+  const getAvailableBattlePets = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getAvailableBattlePets);
+  }, [handleRequest]);
 
   const completeQuest = useCallback(
     async (questData) => {
@@ -197,9 +254,75 @@ export const useGameAPI = (options = {}) => {
     [handleRequest, updateUser, updateInventory]
   );
 
+  const getAvailableQuests = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getAvailableQuests);
+  }, [handleRequest]);
+
+  const getQuestProgress = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getQuestProgress);
+  }, [handleRequest]);
+
+  const getUserStats = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getUserStats);
+  }, [handleRequest]);
+
+  const getLeaderboard = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.game.getLeaderboard, params);
+    },
+    [handleRequest]
+  );
+
   // ---------------------------
-  // 💰 Trading
+  // 🔗 Blockchain Integration
   // ---------------------------
+  const gameConnectWallet = useCallback(
+    async (walletData) => {
+      const data = await handleRequest(gameAPI.game.connectWallet, walletData);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      return data;
+    },
+    [handleRequest, updateUser]
+  );
+
+  const disconnectWallet = useCallback(async () => {
+    const data = await handleRequest(gameAPI.game.disconnectWallet);
+    if (updateUser && data?.data?.user) updateUser(data.data.user);
+    return data;
+  }, [handleRequest, updateUser]);
+
+  const getBlockchainAssets = useCallback(async () => {
+    return await handleRequest(gameAPI.game.getBlockchainAssets);
+  }, [handleRequest]);
+
+  // ---------------------------
+  // 💰 Trading & Marketplace
+  // ---------------------------
+  const getTradeListings = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.trade.getListings, params);
+    },
+    [handleRequest]
+  );
+
+  const getMarketplaceStats = useCallback(async () => {
+    return await handleRequest(gameAPI.trade.getMarketplaceStats);
+  }, [handleRequest]);
+
+  const getUserListings = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.trade.getUserListings, params);
+    },
+    [handleRequest]
+  );
+
+  const getTradeHistory = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.trade.getTradeHistory, params);
+    },
+    [handleRequest]
+  );
+
   const listPet = useCallback(
     async (listingData) => {
       const data = await handleRequest(gameAPI.trade.listPet, listingData);
@@ -210,6 +333,17 @@ export const useGameAPI = (options = {}) => {
     [handleRequest, updateUser, updatePets]
   );
 
+  const listItem = useCallback(
+    async (itemData) => {
+      const data = await handleRequest(gameAPI.trade.listItem, itemData);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      if (updateInventory && data?.data?.inventory)
+        updateInventory(data.data.inventory);
+      return data;
+    },
+    [handleRequest, updateUser, updateInventory]
+  );
+
   const purchasePet = useCallback(
     async (tradeId) => {
       const data = await handleRequest(gameAPI.trade.purchasePet, tradeId);
@@ -218,6 +352,53 @@ export const useGameAPI = (options = {}) => {
       return data;
     },
     [handleRequest, updateUser, updatePets]
+  );
+
+  const purchaseItem = useCallback(
+    async (tradeId) => {
+      const data = await handleRequest(gameAPI.trade.purchaseItem, tradeId);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      if (updateInventory && data?.data?.inventory)
+        updateInventory(data.data.inventory);
+      return data;
+    },
+    [handleRequest, updateUser, updateInventory]
+  );
+
+  const cancelListing = useCallback(
+    async (tradeId) => {
+      const data = await handleRequest(gameAPI.trade.cancelListing, tradeId);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      if (updatePets && data?.data?.pets) updatePets(data.data.pets);
+      return data;
+    },
+    [handleRequest, updateUser, updatePets]
+  );
+
+  const makeOffer = useCallback(
+    async (offerData) => {
+      const data = await handleRequest(gameAPI.trade.makeOffer, offerData);
+      if (updateUser && data?.data?.user) updateUser(data.data.user);
+      return data;
+    },
+    [handleRequest, updateUser]
+  );
+
+  const getUserOffers = useCallback(
+    async (params = {}) => {
+      return await handleRequest(gameAPI.trade.getUserOffers, params);
+    },
+    [handleRequest]
+  );
+
+  // ---------------------------
+  // 🛠️ Utility Functions
+  // ---------------------------
+  const uploadFile = useCallback(
+    async (file, type = "image") => {
+      return await handleRequest(gameAPI.upload.file, file, type);
+    },
+    [handleRequest]
   );
 
   return {
@@ -231,26 +412,59 @@ export const useGameAPI = (options = {}) => {
     walletLogin,
     connectWallet,
     getProfile,
+    getNonce,
 
     // Eggs
     getUserEggs,
+    getEggCatalog,
     hatchEgg,
     purchaseEgg,
     getFreeEgg,
+    previewEgg,
+    syncBlockchainEggs,
 
     // Pets
     getUserPets,
+    getPetDetails,
     upgradePet,
     trainPet,
     fusePets,
+    toggleFavorite,
+    syncBlockchainPets,
 
     // Game Actions
     claimDailyReward,
+    getDailyRewardStatus,
     startBattle,
+    getBattleHistory,
+    getAvailableBattlePets,
     completeQuest,
+    getAvailableQuests,
+    getQuestProgress,
+    getUserStats,
+    getLeaderboard,
 
-    // Trading
+    // Blockchain Integration
+    gameConnectWallet,
+    disconnectWallet,
+    getBlockchainAssets,
+
+    // Trading & Marketplace
+    getTradeListings,
+    getMarketplaceStats,
+    getUserListings,
+    getTradeHistory,
     listPet,
+    listItem,
     purchasePet,
+    purchaseItem,
+    cancelListing,
+    makeOffer,
+    getUserOffers,
+
+    // Utilities
+    uploadFile,
   };
 };
+
+export default useGameAPI;

@@ -102,3 +102,418 @@
 {"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:07.512Z"}
 {"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T06:43:07.882Z"}
 {"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-23T06:52:37.845Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.812Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.859Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.860Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.861Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.862Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-23T09:21:44.914Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:04.275Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:04.444Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:05.344Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:05.399Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:05.472Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:06.667Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:06.723Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:06.743Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:07.624Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:07.654Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:07.705Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.356Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.371Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.407Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.875Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.886Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:08.953Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:09.560Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:09.619Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:09.685Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:12.851Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:12.968Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:13.153Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:15.913Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:15.928Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:16.056Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:17.874Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:18.005Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:18.216Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:20.804Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:20.853Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:21.116Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:23.395Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:23.517Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:22:23.692Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:30:22.874Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:30:22.922Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-23T09:30:48.835Z"}
+{"level":"error","message":"Guest login error: User.findOne is not a function","service":"pet-game-server","stack":"TypeError: User.findOne is not a function\n    at guestLogin (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/AuthController.js:384:39)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-10-23T09:30:48.836Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.861Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.920Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.922Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.923Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.923Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T00:41:52.983Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T00:42:19.116Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T00:42:19.145Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T00:45:06.213Z"}
+{"level":"error","message":"Guest login error: User.findOne is not a function","service":"pet-game-server","stack":"TypeError: User.findOne is not a function\n    at guestLogin (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/AuthController.js:384:39)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-10-24T00:45:06.218Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:04:09.793Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:04:09.803Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:04:35.000Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:04:35.031Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:04:45.629Z"}
+{"level":"error","message":"Guest login error: User.findOne is not a function","service":"pet-game-server","stack":"TypeError: User.findOne is not a function\n    at guestLogin (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/AuthController.js:384:39)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-10-24T01:04:45.633Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:20:07.737Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:20:07.804Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T01:32:57.437Z"}
+{"level":"error","message":"Guest login error: User.findOne is not a function","service":"pet-game-server","stack":"TypeError: User.findOne is not a function\n    at guestLogin (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/AuthController.js:384:39)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-10-24T01:32:57.439Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T01:33:34.265Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.298Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.572Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.573Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.573Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.575Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T03:57:45.624Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T03:58:03.396Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T03:58:03.628Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T03:58:12.028Z"}
+{"_message":"User validation failed","errors":{"email":{"kind":"required","message":"Path `email` is required.","name":"ValidatorError","path":"email","properties":{"message":"Path `email` is required.","path":"email","type":"required"}},"passwordHash":{"kind":"required","message":"Path `passwordHash` is required.","name":"ValidatorError","path":"passwordHash","properties":{"message":"Path `passwordHash` is required.","path":"passwordHash","type":"required"}}},"level":"error","message":"Guest login error: User validation failed: email: Path `email` is required., passwordHash: Path `passwordHash` is required.","service":"pet-game-server","stack":"ValidationError: User validation failed: email: Path `email` is required., passwordHash: Path `passwordHash` is required.\n    at Document.invalidate (C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\mongoose\\lib\\document.js:3219:32)\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\mongoose\\lib\\document.js:3012:17\n    at C:\\Users\\aplaoe\\eggsLikeThat\\eggsLikeThat\\server\\node_modules\\mongoose\\lib\\schematype.js:1368:9\n    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)","timestamp":"2025-10-24T03:58:12.091Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T04:03:41.149Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.050Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.274Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.277Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.278Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.278Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T04:03:48.322Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T04:04:02.547Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T04:04:02.626Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:02:09.589Z"}
+{"level":"info","message":"Guest user created: Guest_1761282129519","service":"pet-game-server","timestamp":"2025-10-24T05:02:10.107Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:02:10.198Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:02:10.207Z"}
+{"level":"error","message":"Get user pets error: Pet.find is not a function","service":"pet-game-server","stack":"TypeError: Pet.find is not a function\n    at getUserPets (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/PetController.js:29:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T05:02:10.219Z"}
+{"level":"error","message":"Get user eggs error: Cannot read properties of undefined (reading 'getEggStats')","service":"pet-game-server","stack":"TypeError: Cannot read properties of undefined (reading 'getEggStats')\n    at getUserEggs (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:38:26)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T05:02:10.223Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T05:13:33.616Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.459Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.872Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.873Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.874Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.876Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T05:13:44.925Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:13:52.703Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:13:52.803Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:13:59.615Z"}
+{"level":"info","message":"Guest user created: Guest_1761282839578","service":"pet-game-server","timestamp":"2025-10-24T05:14:00.090Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:14:00.173Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:14:00.181Z"}
+{"level":"error","message":"Get user pets error: Cannot read properties of undefined (reading 'getPetsByRarity')","service":"pet-game-server","stack":"TypeError: Cannot read properties of undefined (reading 'getPetsByRarity')\n    at getUserPets (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/PetController.js:71:34)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T05:14:00.257Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T05:16:58.440Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.068Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.343Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.344Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.346Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.348Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T05:17:10.389Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:17:19.499Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:17:19.596Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:17:24.641Z"}
+{"level":"info","message":"Guest user created: Guest_1761283044604","service":"pet-game-server","timestamp":"2025-10-24T05:17:25.095Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:17:25.158Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:17:25.163Z"}
+{"level":"error","message":"Get user pets error: Cannot read properties of undefined (reading 'getPetsByRarity')","service":"pet-game-server","stack":"TypeError: Cannot read properties of undefined (reading 'getPetsByRarity')\n    at getUserPets (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/PetController.js:71:34)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T05:17:25.185Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T05:26:26.420Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T05:26:32.802Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T05:26:33.074Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T05:26:33.075Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T05:26:33.076Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T05:26:33.079Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T05:26:33.126Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:45.534Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:45.598Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:50.197Z"}
+{"level":"info","message":"Guest user created: Guest_1761283610158","service":"pet-game-server","timestamp":"2025-10-24T05:26:50.697Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:50.768Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:50.776Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:57.768Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:26:57.780Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T05:28:21.724Z"}
+{"level":"error","message":"Free egg claim error: EGG_TYPES is not defined","service":"pet-game-server","stack":"ReferenceError: EGG_TYPES is not defined\n    at getFreeEgg (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:238:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T05:28:21.734Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T05:29:32.735Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.183Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.494Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.495Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.496Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.496Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T06:25:20.545Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:25:40.832Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:25:40.842Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:26:16.016Z"}
+{"level":"info","message":"Guest user created: Guest_1761287175959","service":"pet-game-server","timestamp":"2025-10-24T06:26:16.761Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:26:16.855Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:26:16.860Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:26:24.223Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:26:24.247Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:32:56.062Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:34:39.132Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T06:37:13.907Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T06:37:31.434Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T06:37:32.235Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T06:37:32.266Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T06:37:32.275Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T06:37:32.286Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T06:37:32.407Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:36.118Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:36.202Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:40.689Z"}
+{"level":"info","message":"Guest user created: Guest_1761287860641","service":"pet-game-server","timestamp":"2025-10-24T06:37:41.436Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:41.523Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:41.532Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:44.562Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:44.633Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:37:48.918Z"}
+{"level":"error","message":"Free egg claim error: EGG_TYPES is not defined","service":"pet-game-server","stack":"ReferenceError: EGG_TYPES is not defined\n    at getFreeEgg (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:238:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T06:37:48.930Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:45:36.593Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:45:36.690Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:45:36.749Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:45:36.835Z"}
+{"level":"info","message":"POST /api/eggs/purchase - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:45:44.164Z"}
+{"level":"error","message":"Purchase egg error: EGG_TYPES is not defined","service":"pet-game-server","stack":"ReferenceError: EGG_TYPES is not defined\n    at purchaseEgg (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:116:43)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T06:45:44.176Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T06:47:02.195Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.046Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.289Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.290Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.291Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.293Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T06:47:19.334Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::ffff:127.0.0.1","service":"pet-game-server","timestamp":"2025-10-24T06:47:22.980Z"}
+{"level":"info","message":"Guest user created: Guest_1761288442940","service":"pet-game-server","timestamp":"2025-10-24T06:47:23.413Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T06:47:23.491Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::ffff:127.0.0.1","service":"pet-game-server","timestamp":"2025-10-24T06:47:23.497Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::ffff:127.0.0.1","service":"pet-game-server","timestamp":"2025-10-24T06:47:25.849Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::ffff:127.0.0.1","service":"pet-game-server","timestamp":"2025-10-24T06:47:25.902Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::ffff:127.0.0.1","service":"pet-game-server","timestamp":"2025-10-24T06:47:29.071Z"}
+{"level":"error","message":"Free egg claim error: Cannot read properties of undefined (reading 'checkLevelUp')","service":"pet-game-server","stack":"TypeError: Cannot read properties of undefined (reading 'checkLevelUp')\n    at getFreeEgg (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:250:30)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T06:47:29.079Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T07:24:33.894Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T07:24:34.124Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T07:24:34.124Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T07:24:34.126Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T07:24:34.128Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T07:24:34.173Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:40.261Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:40.370Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:40.478Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:40.561Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:43.489Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:43.550Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:46.908Z"}
+{"level":"info","message":"Guest user created: Guest_1761290686876","service":"pet-game-server","timestamp":"2025-10-24T07:24:47.342Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:47.385Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:47.391Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:49.251Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:49.288Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:51.564Z"}
+{"level":"info","message":"User Guest_1761290686876 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:24:51.606Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:24:53.728Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:27.409Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:27.468Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:27.480Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:27.513Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:31.096Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:31.099Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:31.122Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:31.147Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:45.016Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:45.119Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:48.707Z"}
+{"level":"info","message":"Guest user created: Guest_1761290868695","service":"pet-game-server","timestamp":"2025-10-24T07:27:49.147Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:49.230Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:49.233Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:51.161Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:51.176Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:54.339Z"}
+{"level":"info","message":"User Guest_1761290868695 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:27:54.359Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:27:59.837Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T07:28:33.611Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.612Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.913Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.915Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.915Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.915Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T07:36:43.967Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:36:58.443Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:36:58.554Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:01.832Z"}
+{"level":"info","message":"Guest user created: Guest_1761291421794","service":"pet-game-server","timestamp":"2025-10-24T07:37:02.308Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:02.372Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:02.377Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:03.716Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:03.726Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:03.769Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:03.788Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:05.625Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:05.662Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:05.694Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:05.759Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:37:24.317Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:01.758Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:01.759Z"}
+{"level":"info","message":"Guest user created: Guest_1761291444293","service":"pet-game-server","timestamp":"2025-10-24T07:38:02.187Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:07.272Z"}
+{"level":"info","message":"Guest user created: Guest_1761291487251","service":"pet-game-server","timestamp":"2025-10-24T07:38:07.789Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:07.836Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:07.840Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:16.050Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:16.056Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:16.066Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:38:16.073Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T07:39:38.439Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T07:40:01.923Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T07:40:02.144Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T07:40:02.145Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T07:40:02.145Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T07:40:02.146Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T07:40:02.187Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:13.672Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:13.794Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:24.354Z"}
+{"level":"info","message":"Guest user created: Guest_1761291624303","service":"pet-game-server","timestamp":"2025-10-24T07:40:24.923Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:24.994Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:25.005Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:27.310Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:27.339Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:27.342Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:40:27.351Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T07:45:40.758Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T07:45:58.543Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T07:45:59.177Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T07:45:59.178Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T07:45:59.180Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T07:45:59.181Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T07:45:59.275Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:00.611Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:00.758Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:04.366Z"}
+{"level":"info","message":"Guest user created: Guest_1761291964332","service":"pet-game-server","timestamp":"2025-10-24T07:46:04.805Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:04.868Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:04.873Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:06.620Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:06.633Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:06.673Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:06.681Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:09.196Z"}
+{"level":"info","message":"User Guest_1761291964332 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:46:09.222Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:46:14.642Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:47:57.695Z"}
+{"level":"info","message":"User Guest_1761291964332 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:47:57.721Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:47:59.218Z"}
+{"level":"info","message":"POST /api/eggs/purchase - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:48:01.403Z"}
+{"level":"info","message":"User Guest_1761291964332 purchased a basic egg for 100 coins","service":"pet-game-server","timestamp":"2025-10-24T07:48:01.423Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:48:02.968Z"}
+{"level":"info","message":"POST /api/eggs/purchase - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:48:28.776Z"}
+{"level":"info","message":"User Guest_1761291964332 purchased a cosmetic egg for 150 coins","service":"pet-game-server","timestamp":"2025-10-24T07:48:28.794Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:48:30.176Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:51:22.145Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:51:22.148Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:37.062Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:37.065Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:37.095Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:37.107Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:38.659Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:38.676Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:38.708Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:54:38.712Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.128Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.134Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.138Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.145Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.180Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:55:47.193Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.114Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.129Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.137Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.142Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.145Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:56:44.167Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:12.152Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:12.156Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:12.173Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:12.179Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:48.107Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:57:48.111Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:58:28.116Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:58:28.122Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T07:58:35.903Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.464Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.809Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.811Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.812Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.812Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T07:58:47.863Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:58:57.700Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:58:57.865Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:01.447Z"}
+{"level":"info","message":"Guest user created: Guest_1761292741397","service":"pet-game-server","timestamp":"2025-10-24T07:59:01.960Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:02.027Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:02.036Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:05.314Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:05.323Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:05.367Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:05.380Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:11.328Z"}
+{"level":"info","message":"User Guest_1761292741397 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:59:11.358Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:12.952Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:26.627Z"}
+{"level":"info","message":"User Guest_1761292741397 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T07:59:26.650Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T07:59:27.630Z"}
+{"level":"info","message":"POST /api/eggs/purchase - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:00:02.624Z"}
+{"level":"info","message":"User Guest_1761292741397 purchased a basic egg for 100 coins","service":"pet-game-server","timestamp":"2025-10-24T08:00:02.647Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:00:04.563Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:01:12.553Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:01:12.559Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:01:13.145Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:01:13.149Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:23.188Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:23.242Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:23.278Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:23.315Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T08:09:35.105Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.683Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.944Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.945Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.945Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.946Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T08:09:42.995Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:47.068Z"}
+{"level":"info","message":"Guest user created: Guest_1761293387012","service":"pet-game-server","timestamp":"2025-10-24T08:09:47.578Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:47.678Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:47.686Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:50.038Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:50.046Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:50.075Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:50.085Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:53.832Z"}
+{"level":"info","message":"User Guest_1761293387012 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T08:09:53.859Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T08:09:55.853Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T09:10:56.178Z"}
+{"level":"info","message":"🧩 Mock blockchain mode enabled (no real transactions)","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.343Z"}
+{"level":"info","message":"🚀 PetVerse Server running on port 3001","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.621Z"}
+{"level":"info","message":"🌍 Environment: development","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.622Z"}
+{"level":"info","message":"🔗 Client URL: http://localhost:5173","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.624Z"}
+{"level":"info","message":"📊 API available at: http://localhost:3001/api","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.625Z"}
+{"level":"info","message":"MongoDB Connected: localhost","service":"pet-game-server","timestamp":"2025-10-24T09:12:01.681Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:23.735Z"}
+{"level":"info","message":"GET /api/health - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:23.749Z"}
+{"level":"info","message":"POST /api/auth/guest - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:54.472Z"}
+{"level":"info","message":"Guest user created: Guest_1761297174414","service":"pet-game-server","timestamp":"2025-10-24T09:12:55.248Z"}
+{"level":"info","message":"GET /api/pets - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:55.335Z"}
+{"level":"info","message":"GET /api/eggs - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:55.340Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:56.899Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:56.906Z"}
+{"level":"warn","message":"Failed to get gas estimates: blockchainService.getGasEstimates is not a function","service":"pet-game-server","stack":"TypeError: blockchainService.getGasEstimates is not a function\n    at getEggCatalog (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:641:48)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T09:12:56.942Z"}
+{"level":"info","message":"GET /api/eggs/catalog/catalog - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:57.000Z"}
+{"level":"info","message":"GET /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:57.009Z"}
+{"level":"warn","message":"Failed to get gas estimates: blockchainService.getGasEstimates is not a function","service":"pet-game-server","stack":"TypeError: blockchainService.getGasEstimates is not a function\n    at getEggCatalog (file:///C:/Users/aplaoe/eggsLikeThat/eggsLikeThat/server/src/controllers/EggController.js:641:48)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-10-24T09:12:57.041Z"}
+{"level":"info","message":"POST /api/eggs/free - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:12:59.707Z"}
+{"level":"info","message":"User Guest_1761297174414 claimed free daily egg","service":"pet-game-server","timestamp":"2025-10-24T09:12:59.743Z"}
+{"level":"info","message":"PUT /api/auth/profile - IP: ::1","service":"pet-game-server","timestamp":"2025-10-24T09:13:05.536Z"}
+{"level":"info","message":"SIGINT received, shutting down gracefully","service":"pet-game-server","timestamp":"2025-10-24T09:13:24.679Z"}

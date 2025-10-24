@@ -9,32 +9,31 @@ const router = express.Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get user's eggs
+// ===== EGG COLLECTION MANAGEMENT =====
 router.get("/", EggController.getUserEggs);
-
-// Get egg details
 router.get("/:eggId", EggController.getEggDetails);
 
-// Purchase egg
+// ===== EGG ACQUISITION =====
 router.post("/purchase", gameActionLimiter, EggController.purchaseEgg);
-
-// Get free daily egg
 router.post("/free", gameActionLimiter, EggController.getFreeEgg);
 
-// Hatch egg
+// ===== EGG HATCHING & INTERACTION =====
 router.post("/:eggId/hatch", gameActionLimiter, EggController.hatchEgg);
-
-// Preview egg contents
 router.get("/:eggId/preview", gameActionLimiter, EggController.previewEgg);
-
-// Apply cosmetic
 router.patch(
   "/:eggId/cosmetic",
   gameActionLimiter,
   EggController.applyCosmetic
 );
 
-// Get egg catalog
+// ===== EGG CATALOG & INFORMATION =====
 router.get("/catalog/catalog", EggController.getEggCatalog);
+
+// ===== BLOCKCHAIN INTEGRATION =====
+router.post(
+  "/blockchain/sync",
+  gameActionLimiter,
+  EggController.syncBlockchainEggs
+);
 
 export default router;

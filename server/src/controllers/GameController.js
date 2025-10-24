@@ -1,8 +1,10 @@
 // src/controllers/GameController.js
+import { ethers } from "ethers";
 import { DatabaseService } from "../services/DatabaseService.js";
 import { serverRNGService } from "../services/RNGService.js";
 import { rewardService } from "../services/RewardService.js";
 import { mailService } from "../services/MailService.js";
+import { blockchainService } from "../config/blockchain.js";
 import {
   scheduleRounds,
   evaluateTurn,
@@ -18,11 +20,12 @@ import {
 } from "../config/battleLogic.js";
 import { ALL_ABILITIES, isOnePlacementTechnique } from "../utils/constants.js";
 import logger from "../utils/logger.js";
+import { config } from "../config/env.js";
 
 const dbService = new DatabaseService();
 
 export const GameController = {
-  // Hatch an egg
+  // Hatch an egg with blockchain integration
   async hatchEgg(req, res) {
     try {
       const userId = req.user.id;
@@ -60,7 +63,7 @@ export const GameController = {
 
       let eggToHatch;
       if (eggId) {
-        // Hatch specific egg
+        // Hatch specific egg - check blockchain ownership
         const eggs = await dbService.getUserEggs(userId);
         eggToHatch = eggs.find((egg) => egg._id.toString() === eggId);
         if (!eggToHatch) {
@@ -75,6 +78,20 @@ export const GameController = {
             message: "Egg has already been hatched",
           });
         }
+
+        // Verify blockchain ownership for specific egg
+        if (eggToHatch.blockchainId && user.walletAddress) {
+          const isOwner = await blockchainService.verifyEggOwnership(
+            user.walletAddress,
+            eggToHatch.blockchainId
+          );
+          if (!isOwner) {
+            return res.status(403).json({
+              success: false,
+              message: "You don't own this egg on the blockchain",
+            });
+          }
+        }
       } else {
         // Create and hatch a basic egg
         const eggData = serverRNGService.generateEggForDB(userId);
@@ -83,6 +100,40 @@ export const GameController = {
 
       // Hatch the egg
       const hatchResult = await dbService.hatchEgg(eggToHatch._id);
+
+      // Mint NFT for hatched pet if it's a pet and user has wallet
+      if (hatchResult.type === "Pet" && user.walletAddress) {
+        try {
+          const mintResult = await blockchainService.mintPetNFT(
+            user.walletAddress,
+            hatchResult.name,
+            hatchResult.type,
+            hatchResult.rarity,
+            hatchResult.isShiny || false
+          );
+
+          if (mintResult.success) {
+            // Update pet with blockchain info
+            await dbService.updatePet(hatchResult._id, {
+              blockchainId: mintResult.tokenId,
+              blockchainNetwork: "polygon",
+              tokenURI: mintResult.tokenURI,
+            });
+
+            hatchResult.blockchainId = mintResult.tokenId;
+            hatchResult.isOnChain = true;
+          } else {
+            logger.warn(
+              `Failed to mint NFT for pet ${hatchResult._id}:`,
+              mintResult.error
+            );
+            hatchResult.isOnChain = false;
+          }
+        } catch (blockchainError) {
+          logger.error("Blockchain minting error:", blockchainError);
+          hatchResult.isOnChain = false;
+        }
+      }
 
       // Update user balance and track free hatch
       if (useFreeRoll) {
@@ -112,6 +163,7 @@ export const GameController = {
             skins: updatedUser.skinIds?.length || 0,
             level: updatedUser.level,
             experience: updatedUser.experience,
+            walletConnected: !!updatedUser.walletAddress,
           },
         },
       };
@@ -126,7 +178,7 @@ export const GameController = {
     }
   },
 
-  // Start a battle with new round-robin system - UPDATED for ONE PLACEMENT
+  // Start a battle with blockchain verification
   async startBattle(req, res) {
     try {
       const userId = req.user.id;
@@ -157,7 +209,26 @@ export const GameController = {
         });
       }
 
-      // Check for ONE PLACEMENT technique - UPDATED LOGIC
+      // Verify blockchain ownership for all pets
+      if (user.walletAddress) {
+        for (const pet of userPets) {
+          if (pet.blockchainId) {
+            const isOwner = await blockchainService.verifyPetOwnership(
+              user.walletAddress,
+              pet.blockchainId,
+              pet.blockchainNetwork || "polygon"
+            );
+            if (!isOwner) {
+              return res.status(403).json({
+                success: false,
+                message: `You don't own pet "${pet.name}" on the blockchain`,
+              });
+            }
+          }
+        }
+      }
+
+      // Check for ONE PLACEMENT technique
       const onePlacementPets = userPets.filter(
         (pet) => pet.technique && isOnePlacementTechnique(pet.technique)
       );
@@ -184,11 +255,11 @@ export const GameController = {
         });
       }
 
-      // Generate opponent team with abilities - UPDATED to respect one placement
+      // Generate opponent team with abilities
       const opponentPets = await this.generateOpponentTeam(
         opponentDifficulty,
         userPets,
-        maxPets // Now respects the one placement limit
+        maxPets
       );
 
       // Convert pets to battle format
@@ -219,7 +290,7 @@ export const GameController = {
         opponentLevel,
         battleResult.winner === "player",
         battleMode,
-        userPets.length // Pass team size for reward calculation
+        userPets.length
       );
 
       // Use calculateBattleRewards from battleLogic for technique bonuses
@@ -272,6 +343,21 @@ export const GameController = {
           petUpdate.level = levelUpResult.newLevel;
           petUpdate.stats = levelUpResult.newStats;
           petUpdate.experience = petUpdate.experience - levelUpResult.expNeeded;
+
+          // Update blockchain if pet leveled up
+          if (pet.blockchainId && user.walletAddress) {
+            try {
+              await blockchainService.levelUpPet(
+                pet.blockchainId,
+                pet.blockchainNetwork || "polygon"
+              );
+            } catch (blockchainError) {
+              logger.warn(
+                `Failed to update blockchain level for pet ${pet.id}:`,
+                blockchainError
+              );
+            }
+          }
         }
 
         await dbService.updatePet(pet.id, petUpdate);
@@ -322,6 +408,8 @@ export const GameController = {
               ability: pet.ability,
               technique: pet.technique,
               isOnePlacement: isOnePlacementTechnique(pet.technique),
+              blockchainId: pet.blockchainId,
+              isOnChain: !!pet.blockchainId,
             })),
             opponentPets: opponentPets.map((pet) => ({
               name: pet.name,
@@ -339,6 +427,7 @@ export const GameController = {
             level: updatedUser.level,
             battlesWon: updatedUser.battlesWon,
             battlesLost: updatedUser.battlesLost,
+            walletAddress: updatedUser.walletAddress,
           },
         },
       };
@@ -353,7 +442,528 @@ export const GameController = {
     }
   },
 
-  // New round-robin battle simulation using scheduleRounds
+  // Connect wallet to user account
+  async connectWallet(req, res) {
+    try {
+      const userId = req.user.id;
+      const { walletAddress } = req.body;
+
+      if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid wallet address",
+        });
+      }
+
+      const user = await dbService.findUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Update user with wallet address
+      await dbService.updateUser(userId, {
+        walletAddress: walletAddress.toLowerCase(),
+        updatedAt: new Date(),
+      });
+
+      // Sync blockchain assets
+      const syncResult = await this.syncBlockchainAssets(userId, walletAddress);
+
+      res.json({
+        success: true,
+        message: "Wallet connected successfully",
+        data: {
+          walletAddress: walletAddress.toLowerCase(),
+          syncResult,
+        },
+      });
+    } catch (error) {
+      logger.error("Connect wallet error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during wallet connection",
+      });
+    }
+  },
+
+  // Disconnect wallet from user account
+  async disconnectWallet(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const user = await dbService.findUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Remove wallet address
+      await dbService.updateUser(userId, {
+        walletAddress: null,
+        updatedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: "Wallet disconnected successfully",
+      });
+    } catch (error) {
+      logger.error("Disconnect wallet error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during wallet disconnection",
+      });
+    }
+  },
+
+  // Sync blockchain assets with database
+  async syncBlockchainAssets(userId, walletAddress) {
+    try {
+      const syncResult = {
+        pets: 0,
+        eggs: 0,
+        skins: 0,
+        techniques: 0,
+      };
+
+      // Sync pets from blockchain
+      const blockchainPets = await blockchainService.getOwnedPets(
+        walletAddress
+      );
+      for (const blockchainPet of blockchainPets) {
+        const existingPet = await dbService.findPetByBlockchainId(
+          blockchainPet.tokenId
+        );
+
+        if (!existingPet) {
+          // Create new pet in database from blockchain
+          const petData = {
+            name: blockchainPet.metadata.name,
+            type: blockchainPet.metadata.petType,
+            rarity: blockchainPet.metadata.rarity,
+            level: blockchainPet.metadata.level,
+            isShiny: blockchainPet.metadata.isShiny,
+            blockchainId: blockchainPet.tokenId,
+            blockchainNetwork: "polygon",
+            tokenURI: blockchainPet.tokenURI,
+            ownerId: userId,
+            stats: this.generateStatsFromRarity(blockchainPet.metadata.rarity),
+          };
+
+          await dbService.createPet(petData);
+          syncResult.pets++;
+        }
+      }
+
+      // Sync eggs from blockchain
+      const blockchainEggs = await blockchainService.getOwnedEggs(
+        walletAddress
+      );
+      for (const blockchainEgg of blockchainEggs) {
+        // Create or update eggs in database
+        for (let i = 0; i < blockchainEgg.amount; i++) {
+          const eggData = {
+            name: blockchainEgg.name,
+            eggType: blockchainEgg.eggType,
+            rarity: this.getRarityFromEggType(blockchainEgg.eggType),
+            blockchainId: blockchainEgg.eggType.toString(),
+            blockchainNetwork: "polygon",
+            ownerId: userId,
+            isHatched: false,
+          };
+
+          await dbService.createEgg(eggData);
+          syncResult.eggs++;
+        }
+      }
+
+      logger.info(`Blockchain sync completed for user ${userId}:`, syncResult);
+      return syncResult;
+    } catch (error) {
+      logger.error("Blockchain sync error:", error);
+      throw error;
+    }
+  },
+
+  // Get user's blockchain assets
+  async getBlockchainAssets(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await dbService.findUserById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet not connected",
+        });
+      }
+
+      // Get assets from blockchain
+      const [pets, eggs, skins, techniques] = await Promise.all([
+        blockchainService.getOwnedPets(user.walletAddress),
+        blockchainService.getOwnedEggs(user.walletAddress),
+        blockchainService.getOwnedSkins(user.walletAddress),
+        blockchainService.getOwnedTechniques(user.walletAddress),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          walletAddress: user.walletAddress,
+          assets: {
+            pets,
+            eggs,
+            skins,
+            techniques,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get blockchain assets error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // List item on marketplace
+  async listOnMarketplace(req, res) {
+    try {
+      const userId = req.user.id;
+      const { itemType, itemId, price, amount = 1 } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user || !user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "User not found or wallet not connected",
+        });
+      }
+
+      let nftContract, tokenId, itemDetails;
+
+      // Get item details based on type
+      switch (itemType) {
+        case "pet":
+          const pet = await dbService.findPetById(itemId);
+          if (!pet || pet.ownerId.toString() !== userId) {
+            return res.status(404).json({
+              success: false,
+              message: "Pet not found or not owned by user",
+            });
+          }
+          if (!pet.blockchainId) {
+            return res.status(400).json({
+              success: false,
+              message: "Pet is not on blockchain",
+            });
+          }
+          nftContract = config.CONTRACT_PET_NFT;
+          tokenId = pet.blockchainId;
+          itemDetails = {
+            name: pet.name,
+            type: pet.type,
+            rarity: pet.rarity,
+            level: pet.level,
+          };
+          break;
+
+        case "egg":
+          const egg = await dbService.findEggById(itemId);
+          if (!egg || egg.ownerId.toString() !== userId) {
+            return res.status(404).json({
+              success: false,
+              message: "Egg not found or not owned by user",
+            });
+          }
+          nftContract = config.CONTRACT_EGG_NFT;
+          tokenId = egg.eggType || 1;
+          itemDetails = {
+            name: egg.name,
+            eggType: egg.eggType,
+            rarity: egg.rarity,
+          };
+          break;
+
+        default:
+          return res.status(400).json({
+            success: false,
+            message: "Unsupported item type",
+          });
+      }
+
+      // List on blockchain marketplace
+      const listResult = await blockchainService.listItem(
+        nftContract,
+        this.getItemTypeEnum(itemType),
+        tokenId,
+        amount,
+        price
+      );
+
+      if (!listResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: `Failed to list item: ${listResult.error}`,
+        });
+      }
+
+      // Save listing in database
+      await dbService.createMarketplaceListing({
+        listingId: listResult.listingId,
+        userId,
+        itemType,
+        itemId,
+        price,
+        amount,
+        nftContract,
+        tokenId,
+        itemDetails,
+        status: "listed",
+        listedAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: "Item listed on marketplace successfully",
+        data: {
+          listingId: listResult.listingId,
+          itemType,
+          itemDetails,
+          price,
+        },
+      });
+    } catch (error) {
+      logger.error("List on marketplace error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Buy item from marketplace
+  async buyFromMarketplace(req, res) {
+    try {
+      const userId = req.user.id;
+      const { listingId } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user || !user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "User not found or wallet not connected",
+        });
+      }
+
+      // Get listing details
+      const listing = await blockchainService.getListing(listingId);
+      if (!listing || !listing.active) {
+        return res.status(404).json({
+          success: false,
+          message: "Listing not found or not active",
+        });
+      }
+
+      if (listing.seller.toLowerCase() === user.walletAddress.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot buy your own listing",
+        });
+      }
+
+      // Buy from blockchain
+      const buyResult = await blockchainService.buyItem(
+        listingId,
+        listing.price
+      );
+
+      if (!buyResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: `Failed to buy item: ${buyResult.error}`,
+        });
+      }
+
+      // Update database
+      await dbService.updateMarketplaceListing(listingId, {
+        status: "sold",
+        buyerId: userId,
+        soldAt: new Date(),
+      });
+
+      // Add item to buyer's collection
+      await this.addMarketplaceItemToUser(userId, listing);
+
+      res.json({
+        success: true,
+        message: "Item purchased successfully",
+        data: {
+          listingId,
+          item: listing,
+        },
+      });
+    } catch (error) {
+      logger.error("Buy from marketplace error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Get marketplace listings
+  async getMarketplaceListings(req, res) {
+    try {
+      const { type, page = 1, limit = 20 } = req.query;
+
+      const listings = await blockchainService.getActiveListings();
+
+      // Filter by type if specified
+      let filteredListings = listings;
+      if (type) {
+        filteredListings = listings.filter(
+          (listing) => this.getItemTypeFromEnum(listing.itemType) === type
+        );
+      }
+
+      // Paginate results
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedListings = filteredListings.slice(startIndex, endIndex);
+
+      // Enhance listings with additional data
+      const enhancedListings = await Promise.all(
+        paginatedListings.map(async (listing) => {
+          let itemDetails = {};
+
+          try {
+            if (listing.itemType === 0) {
+              // PET
+              const metadata = await blockchainService.getPetMetadata(
+                listing.tokenId
+              );
+              itemDetails = {
+                name: metadata.name,
+                type: metadata.petType,
+                rarity: metadata.rarity,
+                level: metadata.level,
+                isShiny: metadata.isShiny,
+              };
+            } else if (listing.itemType === 1) {
+              // EGG
+              itemDetails = {
+                name: `Egg Type ${listing.tokenId}`,
+                eggType: parseInt(listing.tokenId),
+              };
+            }
+          } catch (error) {
+            logger.warn(
+              `Failed to get metadata for listing ${listing.listingId}:`,
+              error
+            );
+          }
+
+          return {
+            ...listing,
+            itemDetails,
+            itemTypeName: this.getItemTypeFromEnum(listing.itemType),
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        data: {
+          listings: enhancedListings,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: filteredListings.length,
+            totalPages: Math.ceil(filteredListings.length / limit),
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Get marketplace listings error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Cancel marketplace listing
+  async cancelMarketplaceListing(req, res) {
+    try {
+      const userId = req.user.id;
+      const { listingId } = req.body;
+
+      const user = await dbService.findUserById(userId);
+      if (!user || !user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "User not found or wallet not connected",
+        });
+      }
+
+      // Get listing to verify ownership
+      const listing = await dbService.getMarketplaceListing(listingId);
+      if (!listing) {
+        return res.status(404).json({
+          success: false,
+          message: "Listing not found",
+        });
+      }
+
+      if (listing.userId.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: "Not authorized to cancel this listing",
+        });
+      }
+
+      if (listing.status !== "listed") {
+        return res.status(400).json({
+          success: false,
+          message: "Listing is not active",
+        });
+      }
+
+      // Cancel on blockchain (this would require a cancel method in blockchain service)
+      // For now, just update database status
+      await dbService.updateMarketplaceListing(listingId, {
+        status: "cancelled",
+        cancelledAt: new Date(),
+      });
+
+      res.json({
+        success: true,
+        message: "Listing cancelled successfully",
+      });
+    } catch (error) {
+      logger.error("Cancel marketplace listing error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Round-robin battle simulation
   async simulateRoundRobinBattle(playerTeam, opponentTeam, battleMode) {
     const battleLog = [];
     let playerWins = 0;
@@ -435,7 +1045,7 @@ export const GameController = {
     };
   },
 
-  // Simulate individual pet battle using evaluateTurn - UPDATED to use useAbility
+  // Simulate individual pet battle
   async simulatePetBattle(playerTrainer, opponentTrainer) {
     const turns = [];
     let currentPlayer = playerTrainer;
@@ -534,7 +1144,7 @@ export const GameController = {
     return actionMatrix[playerAction]?.[opponentAction] || "both damaged";
   },
 
-  // Generate smart action for pets considering abilities using canUseAbility - FIXED
+  // Generate smart action for pets considering abilities
   generatePetAction(pet, opponentPet) {
     // If pet has ability and it's a good time to use it
     if (pet.ability && this.shouldUseAbility(pet, opponentPet)) {
@@ -548,7 +1158,7 @@ export const GameController = {
     return generateSmartAttack(pet, opponentPet);
   },
 
-  // Determine if pet should use its ability using canUseAbility - FIXED
+  // Determine if pet should use its ability
   shouldUseAbility(pet, opponentPet) {
     const ability = ALL_ABILITIES[pet.ability];
     if (!ability) return false;
@@ -580,19 +1190,19 @@ export const GameController = {
     return useChance < 0.3; // 30% chance normally
   },
 
-  // Calculate base battle rewards - UPDATED to consider team size
+  // Calculate base battle rewards
   calculateBaseBattleRewards(
     opponentLevel,
     isVictory,
     battleMode,
     teamSize = 3
   ) {
-    const baseCoins = opponentLevel * 10 * (teamSize / 3); // Scale rewards by team size
+    const baseCoins = opponentLevel * 10 * (teamSize / 3);
     const baseExp = opponentLevel * 5 * (teamSize / 3);
 
     if (!isVictory) {
       return {
-        coins: Math.floor(baseCoins * 0.3), // 30% for loss
+        coins: Math.floor(baseCoins * 0.3),
         experience: Math.floor(baseExp * 0.3),
       };
     }
@@ -605,7 +1215,7 @@ export const GameController = {
     };
   },
 
-  // Convert blockchain pet to battle format using getEffectiveStats
+  // Convert blockchain pet to battle format
   convertPetToBattleFormat(pet) {
     return {
       id: pet.id,
@@ -616,11 +1226,12 @@ export const GameController = {
       technique: pet.technique,
       techniqueLevel: pet.techniqueLevel || 1,
       level: pet.level || 1,
-      stats: getEffectiveStats(pet), // Use effective stats with technique multipliers
+      stats: getEffectiveStats(pet),
       currentHP: pet.currentHP || pet.stats.hp,
       statusEffects: pet.statusEffects || [],
       isAlive: pet.isAlive !== false,
       abilityCooldowns: pet.abilityCooldowns || {},
+      blockchainId: pet.blockchainId,
     };
   },
 
@@ -641,10 +1252,11 @@ export const GameController = {
       isAlive: pet.isAlive !== false,
       trainerName,
       position: index + 1,
+      blockchainId: pet.blockchainId,
     }));
   },
 
-  // Generate opponent team with abilities and techniques - UPDATED for one placement
+  // Generate opponent team with abilities and techniques
   async generateOpponentTeam(difficulty, userPets, maxPets) {
     const difficulties = {
       easy: { levelMultiplier: 0.7, rarity: "common" },
@@ -698,24 +1310,7 @@ export const GameController = {
     return opponentPets;
   },
 
-  // NEW: Validate team composition before battle
-  validateTeamComposition(userPets) {
-    const onePlacementPets = userPets.filter(
-      (pet) => pet.technique && isOnePlacementTechnique(pet.technique)
-    );
-
-    if (onePlacementPets.length > 0 && userPets.length > 1) {
-      return {
-        valid: false,
-        error: `Cannot use multiple pets when "${onePlacementPets[0].name}" has ONE PLACEMENT technique ${onePlacementPets[0].technique}`,
-        onePlacementPet: onePlacementPets[0],
-      };
-    }
-
-    return { valid: true };
-  },
-
-  // NEW: Get available pets for battle (respecting one placement)
+  // Get available pets for battle (respecting one placement)
   async getAvailableBattlePets(req, res) {
     try {
       const userId = req.user.id;
@@ -740,6 +1335,8 @@ export const GameController = {
           ? isOnePlacementTechnique(pet.technique)
           : false,
         stats: getEffectiveStats(pet),
+        blockchainId: pet.blockchainId,
+        isOnChain: !!pet.blockchainId,
       }));
 
       // Check if user has any one placement pets
@@ -753,6 +1350,7 @@ export const GameController = {
           pets: availablePets,
           onePlacementPets: onePlacementPets,
           maxTeamSize: onePlacementPets.length > 0 ? 1 : 3,
+          walletConnected: !!user.walletAddress,
           rules: {
             onePlacement:
               "Pets with ONE PLACEMENT techniques must battle alone",
@@ -875,6 +1473,22 @@ export const GameController = {
           target: 10,
           completed: (user.level || 1) >= 10,
         },
+        {
+          id: "connect_wallet",
+          name: "Blockchain Explorer",
+          difficulty: "easy",
+          description: "Connect your wallet to the game",
+          reward: { coins: 200, experience: 100 },
+          completed: !!user.walletAddress,
+        },
+        {
+          id: "mint_first_nft",
+          name: "NFT Creator",
+          difficulty: "medium",
+          description: "Mint your first pet as NFT",
+          reward: { coins: 300, experience: 150 },
+          completed: user.pets?.some((pet) => !!pet.blockchainId) || false,
+        },
       ];
 
       res.json({
@@ -892,7 +1506,7 @@ export const GameController = {
     }
   },
 
-  // Complete a quest with proper RewardService integration
+  // Complete a quest
   async completeQuest(req, res) {
     try {
       const userId = req.user.id;
@@ -988,8 +1602,8 @@ export const GameController = {
 
       const questProgress = {
         completed: user.completedQuests?.length || 0,
-        inProgress: 4 - (user.completedQuests?.length || 0),
-        totalAvailable: 4,
+        inProgress: 6 - (user.completedQuests?.length || 0),
+        totalAvailable: 6,
       };
 
       res.json({
@@ -1045,7 +1659,7 @@ export const GameController = {
     }
   },
 
-  // Claim daily reward with proper RewardService integration
+  // Claim daily reward
   async claimDailyReward(req, res) {
     try {
       const userId = req.user.id;
@@ -1127,9 +1741,27 @@ export const GameController = {
       const userId = req.user.id;
       const stats = await dbService.getUserStats(userId);
 
+      // Add blockchain stats
+      const user = await dbService.findUserById(userId);
+      const blockchainStats = {
+        walletConnected: !!user.walletAddress,
+        nftPets: user.pets?.filter((pet) => !!pet.blockchainId).length || 0,
+        totalPets: user.pets?.length || 0,
+        nftPercentage: user.pets?.length
+          ? (
+              (user.pets.filter((pet) => !!pet.blockchainId).length /
+                user.pets.length) *
+              100
+            ).toFixed(1)
+          : 0,
+      };
+
       res.json({
         success: true,
-        data: { stats },
+        data: {
+          ...stats,
+          blockchain: blockchainStats,
+        },
       });
     } catch (error) {
       logger.error("Get user stats error:", error);
@@ -1152,6 +1784,7 @@ export const GameController = {
         level: user.level,
         score: type === "level" ? user.level : user.experience,
         battlesWon: user.battlesWon,
+        walletConnected: !!user.walletAddress,
       }));
 
       res.json({
@@ -1201,6 +1834,21 @@ export const GameController = {
         });
       }
 
+      // Update blockchain if pet is on-chain
+      if (pet.blockchainId && user.walletAddress) {
+        try {
+          await blockchainService.levelUpPet(
+            pet.blockchainId,
+            pet.blockchainNetwork || "polygon"
+          );
+        } catch (blockchainError) {
+          logger.warn(
+            `Failed to update blockchain level for pet ${pet.id}:`,
+            blockchainError
+          );
+        }
+      }
+
       await dbService.updatePet(petId, {
         level: levelUpResult.newLevel,
         experience: pet.experience - levelUpResult.expNeeded,
@@ -1217,6 +1865,7 @@ export const GameController = {
             name: pet.name,
             level: levelUpResult.newLevel,
             stats: levelUpResult.newStats,
+            blockchainUpdated: !!pet.blockchainId,
           },
           levelUp: levelUpResult,
         },
@@ -1301,7 +1950,90 @@ export const GameController = {
     }
   },
 
-  // Helper methods
+  // Helper method to add marketplace item to user
+  async addMarketplaceItemToUser(userId, listing) {
+    switch (listing.itemType) {
+      case 0: // PET
+        const petMetadata = await blockchainService.getPetMetadata(
+          listing.tokenId
+        );
+        const petData = {
+          name: petMetadata.name,
+          type: petMetadata.petType,
+          rarity: petMetadata.rarity,
+          level: petMetadata.level,
+          isShiny: petMetadata.isShiny,
+          blockchainId: listing.tokenId,
+          blockchainNetwork: "polygon",
+          ownerId: userId,
+          stats: this.generateStatsFromRarity(petMetadata.rarity),
+        };
+        await dbService.createPet(petData);
+        break;
+
+      case 1: // EGG
+        const eggData = {
+          name: `Egg Type ${listing.tokenId}`,
+          eggType: parseInt(listing.tokenId),
+          rarity: "common",
+          blockchainId: listing.tokenId,
+          blockchainNetwork: "polygon",
+          ownerId: userId,
+          isHatched: false,
+        };
+        await dbService.createEgg(eggData);
+        break;
+    }
+  },
+
+  // Helper methods for blockchain integration
+  generateStatsFromRarity(rarity) {
+    const baseStats = { dmg: 50, hp: 100 };
+    const multipliers = {
+      common: 1,
+      uncommon: 1.2,
+      rare: 1.5,
+      epic: 2,
+      legendary: 3,
+    };
+
+    const multiplier = multipliers[rarity.toLowerCase()] || 1;
+    return {
+      dmg: Math.round(baseStats.dmg * multiplier),
+      hp: Math.round(baseStats.hp * multiplier),
+    };
+  },
+
+  getRarityFromEggType(eggType) {
+    const rarities = {
+      1: "common",
+      2: "uncommon",
+      3: "rare",
+    };
+    return rarities[eggType] || "common";
+  },
+
+  getItemTypeEnum(itemType) {
+    const types = {
+      pet: 0,
+      egg: 1,
+      skin: 2,
+      technique: 3,
+    };
+    return types[itemType] || 0;
+  },
+
+  getItemTypeFromEnum(itemTypeEnum) {
+    const types = {
+      0: "pet",
+      1: "egg",
+      2: "skin",
+      3: "technique",
+    };
+    return types[itemTypeEnum] || "unknown";
+  },
+
+  // Original helper methods
   getOpponentLevel(difficulty, userLevel) {
     const multipliers = {
       easy: 0.8,
@@ -1379,6 +2111,16 @@ export const GameController = {
         difficulty: "medium",
         description: "Reach level 10",
       },
+      connect_wallet: {
+        name: "Blockchain Explorer",
+        difficulty: "easy",
+        description: "Connect your wallet to the game",
+      },
+      mint_first_nft: {
+        name: "NFT Creator",
+        difficulty: "medium",
+        description: "Mint your first pet as NFT",
+      },
     };
     return quests[questId];
   },
@@ -1393,6 +2135,10 @@ export const GameController = {
         return (user.battlesWon || 0) >= 5;
       case "reach_level_10":
         return (user.level || 1) >= 10;
+      case "connect_wallet":
+        return !!user.walletAddress;
+      case "mint_first_nft":
+        return user.pets?.some((pet) => !!pet.blockchainId) || false;
       default:
         return false;
     }
@@ -1418,6 +2164,8 @@ export const GameController = {
           stats: result.stats,
           level: result.level,
           isShiny: result.isShiny,
+          blockchainId: result.blockchainId,
+          isOnChain: !!result.blockchainId,
         },
       };
     } else if (result.type === "Technique") {

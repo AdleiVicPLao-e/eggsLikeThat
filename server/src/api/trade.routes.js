@@ -6,6 +6,7 @@ import {
   tradeCreationSchema,
   offerCreationSchema,
   counterOfferSchema,
+  itemListingSchema,
 } from "../utils/validators.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { gameActionLimiter } from "../middleware/rateLimiter.js";
@@ -27,33 +28,42 @@ router.get("/transactions", TradeController.getTransactionHistory);
 // Offer management
 router.get("/offers", TradeController.getUserOffers);
 
-// Trading actions (require wallet)
+// Trading actions
 router.post(
   "/list",
-  authMiddleware,
   gameActionLimiter,
   validate(tradeCreationSchema),
   TradeController.listPet
 );
 
+router.post(
+  "/list-item",
+  gameActionLimiter,
+  validate(itemListingSchema),
+  TradeController.listItem
+);
+
 router.delete(
   "/list/:tradeId",
-  authMiddleware,
   gameActionLimiter,
   TradeController.cancelListing
 );
 
 router.post(
   "/purchase/:tradeId",
-  authMiddleware,
   gameActionLimiter,
   TradeController.purchasePet
 );
 
-// Offer actions (require wallet)
+router.post(
+  "/purchase-item/:tradeId",
+  gameActionLimiter,
+  TradeController.purchaseItem
+);
+
+// Offer actions
 router.post(
   "/offer",
-  authMiddleware,
   gameActionLimiter,
   validate(offerCreationSchema),
   TradeController.makeOffer
@@ -61,21 +71,18 @@ router.post(
 
 router.post(
   "/offer/:offerId/accept",
-  authMiddleware,
   gameActionLimiter,
   TradeController.acceptOffer
 );
 
 router.post(
   "/offer/:offerId/reject",
-  authMiddleware,
   gameActionLimiter,
   TradeController.rejectOffer
 );
 
 router.post(
   "/offer/:offerId/counter",
-  authMiddleware,
   gameActionLimiter,
   validate(counterOfferSchema),
   TradeController.counterOffer
@@ -83,9 +90,16 @@ router.post(
 
 router.delete(
   "/offer/:offerId",
-  authMiddleware,
   gameActionLimiter,
   TradeController.cancelOffer
+);
+
+// Blockchain integration routes
+router.get("/nfts", TradeController.getUserNFTs);
+router.post("/sync-blockchain", TradeController.syncBlockchainListings);
+router.get(
+  "/verify-ownership/:tokenId/:nftContract",
+  TradeController.verifyOwnership
 );
 
 export default router;

@@ -5,12 +5,13 @@ import { User } from "../models/User.js";
 import Transaction from "../models/Transaction.js";
 import Offer from "../models/Offer.js";
 import { tradeService, marketplaceService } from "../services/TradeService.js";
+import { blockchainService } from "../config/blockchain.js";
 import { mailService } from "../services/MailService.js";
 import logger from "../utils/logger.js";
 import mongoose from "mongoose";
 
 export const TradeController = {
-  // List a pet for sale (specific function for the route)
+  // List a pet for sale with blockchain integration
   async listPet(req, res) {
     try {
       const { petId, price, currency = "ETH" } = req.body;
@@ -32,7 +33,79 @@ export const TradeController = {
         });
       }
 
-      // Check if pet is already listed
+      // Handle blockchain listing
+      if (currency === "ETH" || currency === "MATIC") {
+        if (!user.walletAddress) {
+          return res.status(400).json({
+            success: false,
+            message: "Wallet address required for blockchain listings",
+          });
+        }
+
+        if (!pet.blockchain?.tokenId) {
+          return res.status(400).json({
+            success: false,
+            message: "Only blockchain pets can be listed for crypto",
+          });
+        }
+
+        // List on blockchain marketplace
+        const result = await blockchainService.listItem(
+          blockchainService.contracts.petNFT?.polygon?.address,
+          blockchainService.ITEM_TYPES.PET,
+          pet.blockchain.tokenId,
+          1, // amount
+          price,
+          "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain listing failed: ${result.error}`,
+          });
+        }
+
+        // Create local trade record
+        const trade = new Trade({
+          seller: user._id,
+          pet: petId,
+          price,
+          currency,
+          status: "listed",
+          listedAt: new Date(),
+          blockchain: {
+            listingId: result.listingId,
+            contractAddress:
+              blockchainService.contracts.marketplace?.polygon?.address,
+            network: "polygon",
+            transactionHash: result.transactionHash,
+          },
+        });
+
+        await trade.save();
+
+        logger.info(
+          `User ${user.username} listed blockchain pet ${pet.name} for ${price} ${currency}`
+        );
+
+        return res.status(201).json({
+          success: true,
+          message: "Pet listed on blockchain marketplace!",
+          data: {
+            trade: trade.toJSON(),
+            blockchain: result,
+            user: {
+              coins: user.coins,
+              level: user.level,
+              totalBattles: user.totalBattles,
+              winRate: user.winRate,
+            },
+          },
+        });
+      }
+
+      // Original coin-based listing logic
       const existingTrade = await Trade.findOne({
         pet: petId,
         status: "listed",
@@ -45,7 +118,6 @@ export const TradeController = {
         });
       }
 
-      // Check for pending offers
       const pendingOffers = await Offer.find({
         pet: petId,
         status: "pending",
@@ -59,7 +131,6 @@ export const TradeController = {
         });
       }
 
-      // Use trade service to list pet
       const result = await tradeService.listPet(
         user._id,
         petId,
@@ -74,7 +145,6 @@ export const TradeController = {
         });
       }
 
-      // Create transaction record for listing fee
       const listingFee = price * result.trade.marketplaceFee;
       const transaction = new Transaction({
         user: user._id,
@@ -119,20 +189,11 @@ export const TradeController = {
     }
   },
 
-  // Purchase a specific pet listing
+  // Purchase a specific pet listing with blockchain integration
   async purchasePet(req, res) {
     try {
       const { tradeId } = req.params;
       const user = await User.findById(req.user._id);
-
-      const result = await tradeService.purchaseItem(user._id, tradeId);
-
-      if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          message: result.error,
-        });
-      }
 
       const trade = await Trade.findById(tradeId)
         .populate("seller")
@@ -142,6 +203,120 @@ export const TradeController = {
         return res.status(404).json({
           success: false,
           message: "Trade or pet not found",
+        });
+      }
+
+      // Handle blockchain purchase
+      if (trade.currency === "ETH" || trade.currency === "MATIC") {
+        if (!user.walletAddress) {
+          return res.status(400).json({
+            success: false,
+            message: "Wallet address required for blockchain purchases",
+          });
+        }
+
+        if (!trade.blockchain?.listingId) {
+          return res.status(400).json({
+            success: false,
+            message: "This listing is not on the blockchain",
+          });
+        }
+
+        // Purchase from blockchain marketplace
+        const result = await blockchainService.buyItem(
+          trade.blockchain.listingId,
+          trade.price,
+          trade.blockchain.network || "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain purchase failed: ${result.error}`,
+          });
+        }
+
+        // Update local records
+        trade.buyer = user._id;
+        trade.status = "sold";
+        trade.soldAt = new Date();
+        trade.blockchain.purchaseTransactionHash = result.transactionHash;
+        await trade.save();
+
+        // Transfer pet ownership
+        const pet = trade.pet;
+        pet.ownerId = user._id;
+        if (pet.blockchain) {
+          // Verify blockchain ownership
+          const isOwner = await blockchainService.verifyPetOwnership(
+            user.walletAddress,
+            pet.blockchain.tokenId,
+            pet.blockchain.network
+          );
+
+          if (!isOwner) {
+            logger.warn(
+              `Blockchain ownership verification failed for pet ${pet._id}`
+            );
+          }
+        }
+        await pet.save();
+
+        const seller = await User.findById(trade.seller._id);
+
+        // Add experience for both users
+        const buyerExpResult = user.addExperience(25);
+        const sellerExpResult = seller.addExperience(15);
+        await user.save();
+        await seller.save();
+
+        logger.info(
+          `User ${user.username} purchased blockchain pet ${pet.name} from ${seller.username}`
+        );
+
+        const responseData = {
+          success: true,
+          message: "Blockchain pet purchased successfully!",
+          data: {
+            trade: trade.toJSON(),
+            blockchain: result,
+            pet: {
+              ...pet.toObject(),
+              power: this.calculatePetPower(pet),
+              totalBattles: pet.battlesWon + pet.battlesLost,
+              winRate:
+                pet.battlesWon + pet.battlesLost > 0
+                  ? (
+                      (pet.battlesWon / (pet.battlesWon + pet.battlesLost)) *
+                      100
+                    ).toFixed(1)
+                  : 0,
+            },
+            user: {
+              coins: user.coins,
+              level: user.level,
+              experience: user.experience,
+              totalBattles: user.totalBattles,
+              winRate: user.winRate,
+            },
+          },
+        };
+
+        if (buyerExpResult.leveledUp) {
+          responseData.data.user.leveledUp = true;
+          responseData.data.user.newLevel = buyerExpResult.newLevel;
+        }
+
+        return res.json(responseData);
+      }
+
+      // Original coin-based purchase logic
+      const result = await tradeService.purchaseItem(user._id, tradeId);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error,
         });
       }
 
@@ -661,6 +836,21 @@ export const TradeController = {
         });
       }
 
+      // Create counter offer
+      const counterOffer = new Offer({
+        fromUser: user._id,
+        toUser: originalOffer.fromUser._id,
+        pet: originalOffer.pet,
+        itemId: originalOffer.itemId,
+        itemType: originalOffer.itemType,
+        offerPrice: counterPrice,
+        currency: originalOffer.currency,
+        message: message || "Counter offer",
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours
+        isCounterOffer: true,
+        originalOffer: offerId,
+      });
+
       await counterOffer.save();
 
       // Update original offer to show it has a counter
@@ -908,7 +1098,79 @@ export const TradeController = {
         });
       }
 
-      // Use trade service to list item
+      // Handle blockchain listing for supported item types
+      if ((currency === "ETH" || currency === "MATIC") && itemType === "pet") {
+        if (!user.walletAddress) {
+          return res.status(400).json({
+            success: false,
+            message: "Wallet address required for blockchain listings",
+          });
+        }
+
+        if (!item.blockchain?.tokenId) {
+          return res.status(400).json({
+            success: false,
+            message: "Only blockchain pets can be listed for crypto",
+          });
+        }
+
+        // List on blockchain marketplace
+        const result = await blockchainService.listItem(
+          blockchainService.contracts.petNFT?.polygon?.address,
+          blockchainService.ITEM_TYPES.PET,
+          item.blockchain.tokenId,
+          1, // amount
+          price,
+          "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain listing failed: ${result.error}`,
+          });
+        }
+
+        // Create local trade record
+        const trade = new Trade({
+          seller: user._id,
+          pet: itemId,
+          price,
+          currency,
+          status: "listed",
+          listedAt: new Date(),
+          blockchain: {
+            listingId: result.listingId,
+            contractAddress:
+              blockchainService.contracts.marketplace?.polygon?.address,
+            network: "polygon",
+            transactionHash: result.transactionHash,
+          },
+        });
+
+        await trade.save();
+
+        logger.info(
+          `User ${user.username} listed blockchain ${itemType} ${itemName} for ${price} ${currency}`
+        );
+
+        return res.status(201).json({
+          success: true,
+          message: `${itemType} listed on blockchain marketplace!`,
+          data: {
+            trade: trade.toJSON(),
+            blockchain: result,
+            user: {
+              coins: user.coins,
+              level: user.level,
+              totalBattles: user.totalBattles,
+              winRate: user.winRate,
+            },
+          },
+        });
+      }
+
+      // Use trade service to list item for non-blockchain or coin-based listings
       let result;
       switch (itemType) {
         case "pet":
@@ -1003,14 +1265,41 @@ export const TradeController = {
       const { tradeId } = req.params;
       const user = await User.findById(req.user._id);
 
-      const result = await tradeService.cancelListing(user._id, tradeId);
-
-      if (!result.success) {
-        return res.status(400).json({
+      const trade = await Trade.findById(tradeId);
+      if (!trade) {
+        return res.status(404).json({
           success: false,
-          message: result.error,
+          message: "Listing not found",
         });
       }
+
+      // Check if user owns the listing
+      if (trade.seller.toString() !== user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only cancel your own listings",
+        });
+      }
+
+      // Handle blockchain listing cancellation
+      if (trade.blockchain?.listingId) {
+        const result = await blockchainService.cancelListing(
+          trade.blockchain.listingId,
+          trade.blockchain.network || "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain cancellation failed: ${result.error}`,
+          });
+        }
+      }
+
+      // Cancel local listing
+      trade.status = "cancelled";
+      trade.cancelledAt = new Date();
+      await trade.save();
 
       // Add experience for trade activity
       const expResult = user.addExperience(10);
@@ -1022,7 +1311,7 @@ export const TradeController = {
         success: true,
         message: "Listing cancelled successfully",
         data: {
-          blockchain: result.blockchain,
+          trade: trade.toJSON(),
           user: {
             coins: user.coins,
             level: user.level,
@@ -1055,6 +1344,126 @@ export const TradeController = {
       const { tradeId } = req.params;
       const user = await User.findById(req.user._id);
 
+      const trade = await Trade.findById(tradeId)
+        .populate("seller")
+        .populate("pet")
+        .populate("itemId");
+
+      if (!trade) {
+        return res.status(404).json({
+          success: false,
+          message: "Listing not found",
+        });
+      }
+
+      // Handle blockchain purchase
+      if (trade.currency === "ETH" || trade.currency === "MATIC") {
+        if (!user.walletAddress) {
+          return res.status(400).json({
+            success: false,
+            message: "Wallet address required for blockchain purchases",
+          });
+        }
+
+        if (!trade.blockchain?.listingId) {
+          return res.status(400).json({
+            success: false,
+            message: "This listing is not on the blockchain",
+          });
+        }
+
+        // Purchase from blockchain marketplace
+        const result = await blockchainService.buyItem(
+          trade.blockchain.listingId,
+          trade.price,
+          trade.blockchain.network || "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain purchase failed: ${result.error}`,
+          });
+        }
+
+        // Update local records
+        trade.buyer = user._id;
+        trade.status = "sold";
+        trade.soldAt = new Date();
+        trade.blockchain.purchaseTransactionHash = result.transactionHash;
+        await trade.save();
+
+        // Transfer item ownership
+        if (trade.pet) {
+          const pet = trade.pet;
+          pet.ownerId = user._id;
+          if (pet.blockchain) {
+            // Verify blockchain ownership
+            const isOwner = await blockchainService.verifyPetOwnership(
+              user.walletAddress,
+              pet.blockchain.tokenId,
+              pet.blockchain.network
+            );
+
+            if (!isOwner) {
+              logger.warn(
+                `Blockchain ownership verification failed for pet ${pet._id}`
+              );
+            }
+          }
+          await pet.save();
+        } else if (trade.itemId) {
+          // Handle other item types (eggs, techniques, skins)
+          const Model =
+            trade.itemType === "egg"
+              ? Egg
+              : trade.itemType === "technique"
+              ? mongoose.models.Technique
+              : mongoose.models.Skin;
+          await Model.findByIdAndUpdate(trade.itemId, {
+            ownerId: user._id,
+          });
+        }
+
+        const seller = await User.findById(trade.seller._id);
+
+        // Add experience for both users
+        const buyerExpResult = user.addExperience(25);
+        const sellerExpResult = seller.addExperience(15);
+        await user.save();
+        await seller.save();
+
+        logger.info(
+          `User ${user.username} purchased blockchain ${
+            trade.itemType || "pet"
+          } from ${seller.username}`
+        );
+
+        const responseData = {
+          success: true,
+          message: "Blockchain item purchased successfully!",
+          data: {
+            trade: trade.toJSON(),
+            blockchain: result,
+            user: {
+              coins: user.coins,
+              level: user.level,
+              experience: user.experience,
+              totalBattles: user.totalBattles,
+              winRate: user.winRate,
+            },
+          },
+        };
+
+        if (buyerExpResult.leveledUp) {
+          responseData.data.user.leveledUp = true;
+          responseData.data.user.newLevel = buyerExpResult.newLevel;
+        }
+
+        return res.json(responseData);
+      }
+
+      // Original coin-based purchase logic
       const result = await tradeService.purchaseItem(user._id, tradeId);
 
       if (!result.success) {
@@ -1063,11 +1472,6 @@ export const TradeController = {
           message: result.error,
         });
       }
-
-      const trade = await Trade.findById(tradeId)
-        .populate("seller")
-        .populate("pet")
-        .populate("itemId");
 
       // Get item details based on type
       let item, itemName, itemType;
@@ -1224,7 +1628,7 @@ export const TradeController = {
       if (maxPrice)
         filters.price = { ...filters.price, $lte: parseFloat(maxPrice) };
 
-      // Get listings with pagination
+      // Get local listings with pagination
       const result = await tradeService.getListings(
         filters,
         parseInt(page),
@@ -1238,7 +1642,22 @@ export const TradeController = {
         });
       }
 
-      // Enhance listings with additional data
+      // Get blockchain listings if requested
+      let blockchainListings = [];
+      if (includeBlockchain === "true") {
+        try {
+          const blockchainResult = await blockchainService.getActiveListings();
+          blockchainListings = blockchainResult.map((listing) => ({
+            ...listing,
+            isBlockchain: true,
+            timeListed: this.formatTimeListed(new Date()), // Approximate
+          }));
+        } catch (error) {
+          logger.warn("Failed to fetch blockchain listings:", error);
+        }
+      }
+
+      // Enhance local listings with additional data
       const enhancedTrades = await Promise.all(
         result.trades.map(async (trade) => {
           let item, itemDetails;
@@ -1285,15 +1704,6 @@ export const TradeController = {
           };
         })
       );
-
-      // Get blockchain listings if requested
-      let blockchainListings = [];
-      if (includeBlockchain === "true") {
-        const blockchainResult = await tradeService.getBlockchainListings();
-        if (blockchainResult.success) {
-          blockchainListings = blockchainResult.listings;
-        }
-      }
 
       res.json({
         success: true,
@@ -1510,30 +1920,58 @@ export const TradeController = {
     }
   },
 
-  // Sync blockchain listings
+  // Sync blockchain marketplace listings
   async syncBlockchainListings(req, res) {
     try {
-      const result = await tradeService.syncBlockchainListings();
+      const result = await blockchainService.getActiveListings();
+      let syncedCount = 0;
 
-      if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          message: result.error,
+      for (const blockchainListing of result) {
+        // Check if we already have this listing in database
+        const existingTrade = await Trade.findOne({
+          "blockchain.listingId": blockchainListing.listingId,
         });
+
+        if (!existingTrade) {
+          // Find the corresponding pet in our database
+          const pet = await Pet.findOne({
+            "blockchain.tokenId": blockchainListing.tokenId,
+          });
+
+          if (pet) {
+            const trade = new Trade({
+              seller: pet.ownerId,
+              pet: pet._id,
+              price: parseFloat(blockchainListing.price),
+              currency: "ETH", // Default for blockchain listings
+              status: "listed",
+              listedAt: new Date(),
+              blockchain: {
+                listingId: blockchainListing.listingId,
+                contractAddress: blockchainListing.nftContract,
+                network: "polygon",
+              },
+            });
+
+            await trade.save();
+            syncedCount++;
+          }
+        }
       }
 
       res.json({
         success: true,
-        message: `Successfully synced ${result.synced} listings with blockchain`,
+        message: `Synced ${syncedCount} blockchain marketplace listings`,
         data: {
-          synced: result.synced,
+          synced: syncedCount,
+          totalBlockchain: result.length,
         },
       });
     } catch (error) {
       logger.error("Sync blockchain listings error:", error);
       res.status(500).json({
         success: false,
-        message: "Internal server error during blockchain sync",
+        message: "Failed to sync blockchain listings",
       });
     }
   },
@@ -1543,19 +1981,29 @@ export const TradeController = {
     try {
       const user = await User.findById(req.user._id);
 
-      const result = await tradeService.getUserNFTs(user._id);
-
-      if (!result.success) {
+      if (!user || !user.walletAddress) {
         return res.status(400).json({
           success: false,
-          message: result.error,
+          message: "Wallet address not found",
         });
       }
+
+      const pets = await blockchainService.getOwnedPets(user.walletAddress);
+      const eggs = await blockchainService.getOwnedEggs(user.walletAddress);
+      const skins = await blockchainService.getOwnedSkins(user.walletAddress);
+      const techniques = await blockchainService.getOwnedTechniques(
+        user.walletAddress
+      );
 
       res.json({
         success: true,
         data: {
-          nfts: result.nfts,
+          nfts: {
+            pets,
+            eggs,
+            skins,
+            techniques,
+          },
           user: {
             walletAddress: user.walletAddress,
             coins: user.coins,
@@ -1580,10 +2028,17 @@ export const TradeController = {
       const { tokenId, nftContract } = req.params;
       const user = await User.findById(req.user._id);
 
-      const isOwner = await marketplaceService.verifyOwnership(
-        user._id,
+      if (!user || !user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address not found",
+        });
+      }
+
+      const isOwner = await blockchainService.verifyPetOwnership(
+        user.walletAddress,
         tokenId,
-        nftContract
+        "polygon"
       );
 
       res.json({
@@ -1837,14 +2292,41 @@ export const TradeController = {
       const total = await Transaction.countDocuments(query);
 
       // Calculate spending statistics
-      const spendingStats = await Transaction.getUserSpending(
-        user._id,
-        "coins"
-      );
-      const ethSpendingStats = await Transaction.getUserSpending(
-        user._id,
-        "ETH"
-      );
+      const spendingStats = await Transaction.aggregate([
+        {
+          $match: {
+            user: user._id,
+            currency: "coins",
+            status: "completed",
+            amount: { $lt: 0 },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalSpent: { $sum: { $abs: "$amount" } },
+            transactionCount: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const ethSpendingStats = await Transaction.aggregate([
+        {
+          $match: {
+            user: user._id,
+            currency: "ETH",
+            status: "completed",
+            amount: { $lt: 0 },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalSpent: { $sum: { $abs: "$amount" } },
+            transactionCount: { $sum: 1 },
+          },
+        },
+      ]);
 
       res.json({
         success: true,
@@ -1878,7 +2360,7 @@ export const TradeController = {
     }
   },
 
-  // Helper methods (keep all existing helper methods)
+  // Helper methods
   getSortOption(sortBy) {
     const sortOptions = {
       newest: { listedAt: -1 },
@@ -1910,7 +2392,7 @@ export const TradeController = {
   },
 
   calculatePetPower(pet) {
-    const { attack, defense, speed, health } = pet.stats;
+    const { dmg, hp, range, spa } = pet.stats || {};
     const tierMultiplier = {
       common: 1,
       uncommon: 1.2,
@@ -1919,9 +2401,12 @@ export const TradeController = {
       legendary: 3,
     };
 
-    const basePower = attack + defense + speed + health / 10;
+    const basePower =
+      (dmg || 0) + (hp || 0) / 10 + (range || 0) * 10 + (1 / (spa || 1)) * 20;
     return Math.round(
-      basePower * tierMultiplier[pet.tier] * (1 + (pet.level - 1) * 0.1)
+      basePower *
+        (tierMultiplier[pet.rarity] || 1) *
+        (1 + ((pet.level || 1) - 1) * 0.1)
     );
   },
 
@@ -2004,7 +2489,7 @@ export const TradeController = {
       {
         $group: {
           _id: {
-            tier: "$petData.tier",
+            rarity: "$petData.rarity",
             type: "$petData.type",
           },
           count: { $sum: 1 },
@@ -2021,7 +2506,7 @@ export const TradeController = {
     ]);
 
     return popular.map((item) => ({
-      tier: item._id.tier,
+      rarity: item._id.rarity,
       type: item._id.type,
       sales: item.count,
       averagePrice: item.averagePrice,

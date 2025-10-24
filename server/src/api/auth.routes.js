@@ -10,6 +10,7 @@ router.post("/login", AuthController.login);
 router.post("/wallet/register", AuthController.walletRegister);
 router.post("/wallet/login", AuthController.walletLogin);
 router.post("/guest", AuthController.guestLogin);
+router.post("/nonce", AuthController.getNonce); // New nonce endpoint
 
 // Protected routes
 router.get("/profile", authMiddleware, AuthController.getProfile);

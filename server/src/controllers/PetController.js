@@ -1,44 +1,63 @@
 import { Pet } from "../models/Pet.js";
 import { User } from "../models/User.js";
 import { serverRNGService } from "../services/RNGService.js";
+import { blockchainService } from "../config/blockchain.js";
 import logger from "../utils/logger.js";
 
 export const PetController = {
-  // Get user's pets
+  // Get user's pets with blockchain integration
   async getUserPets(req, res) {
     try {
-      const { page = 1, limit = 20, tier, type, sortBy = "level" } = req.query;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const {
+        page = 1,
+        limit = 20,
+        rarity,
+        type,
+        sortBy = "level",
+        includeBlockchain = "true",
+      } = req.query;
+      const userId = req.user._id || req.user.id;
+      const walletAddress = req.user.walletAddress;
 
-      const query = { owner: user._id };
+      const query = { ownerId: userId };
 
       // Apply filters
-      if (tier) query.tier = tier;
+      if (rarity) query.rarity = rarity;
       if (type) query.type = type;
 
       // Sort options
       const sortOptions = {
-        level: { level: -1, "stats.attack": -1 },
-        attack: { "stats.attack": -1, level: -1 },
-        defense: { "stats.defense": -1, level: -1 },
+        level: { level: -1, "stats.dmg": -1 },
+        attack: { "stats.dmg": -1, level: -1 },
+        defense: { "stats.hp": -1, level: -1 },
         newest: { createdAt: -1 },
         oldest: { createdAt: 1 },
-        favorite: { isFavorite: -1, level: -1 },
       };
 
-      const pets = await Pet.find(query)
-        .sort(sortOptions[sortBy] || sortOptions.level)
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit))
-        .select("-__v")
-        .lean();
+      const pets = await Pet.find(query, {
+        sort: sortOptions[sortBy] || sortOptions.level,
+        skip: (page - 1) * limit,
+        limit: parseInt(limit),
+      });
 
       const total = await Pet.countDocuments(query);
 
-      // Calculate additional stats
+      // Get blockchain pets if requested and user has wallet
+      let blockchainPets = [];
+      if (includeBlockchain === "true" && walletAddress) {
+        try {
+          blockchainPets = await blockchainService.getOwnedPets(walletAddress);
+        } catch (error) {
+          logger.warn("Failed to fetch blockchain pets:", error);
+        }
+      }
+
+      // Calculate additional stats using RNG service for power calculation
       const petsWithStats = pets.map((pet) => ({
-        ...pet,
-        power: serverRNGService.calculatePetPower(pet),
+        ...pet.toJSON(),
+        power:
+          serverRNGService.calculatePetPower?.(pet) ||
+          PetController.calculatePetPower(pet),
         totalBattles: pet.battlesWon + pet.battlesLost,
         winRate:
           pet.battlesWon + pet.battlesLost > 0
@@ -49,10 +68,18 @@ export const PetController = {
             : 0,
       }));
 
+      // Get user for stats
+      const user = await User.findById(userId);
+
+      // Get statistics using helper methods
+      const byRarity = await PetController.getPetsByRarity(userId);
+      const byType = await PetController.getPetsByType(userId);
+
       res.json({
         success: true,
         data: {
           pets: petsWithStats,
+          blockchainPets,
           pagination: {
             page: parseInt(page),
             limit: parseInt(limit),
@@ -61,13 +88,13 @@ export const PetController = {
           },
           stats: {
             totalPets: total,
-            byTier: await this.getPetsByTier(user._id),
-            byType: await this.getPetsByType(user._id),
+            byRarity,
+            byType,
             userStats: {
-              totalPets: user.ownedPets.length,
+              totalPets: user.pets.length,
               level: user.level,
               experience: user.experience,
-              coins: user.coins,
+              coins: user.balance,
               totalBattles: user.totalBattles,
               winRate: user.winRate,
             },
@@ -87,12 +114,9 @@ export const PetController = {
   async getPetDetails(req, res) {
     try {
       const { petId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const userId = req.user._id || req.user.id;
 
-      const pet = await Pet.findOne({ _id: petId, owner: user._id })
-        .populate("owner", "username level")
-        .lean();
-
+      const pet = await Pet.findOne({ _id: petId, ownerId: userId });
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -100,11 +124,16 @@ export const PetController = {
         });
       }
 
-      // Calculate additional stats
+      // Get user for additional info
+      const user = await User.findById(userId);
+
+      // Calculate additional stats with RNG service
       const totalBattles = pet.battlesWon + pet.battlesLost;
       const enhancedPet = {
-        ...pet,
-        power: serverRNGService.calculatePetPower(pet),
+        ...pet.toJSON(),
+        power:
+          serverRNGService.calculatePetPower?.(pet) ||
+          PetController.calculatePetPower(pet),
         totalBattles,
         winRate:
           totalBattles > 0
@@ -116,7 +145,7 @@ export const PetController = {
           100 *
           100
         ).toFixed(1),
-        upgradeCost: this.calculateUpgradeCost(pet.level),
+        upgradeCost: PetController.calculateUpgradeCost(pet.level),
       };
 
       res.json({
@@ -124,7 +153,7 @@ export const PetController = {
         data: {
           pet: enhancedPet,
           user: {
-            coins: user.coins,
+            coins: user.balance,
             level: user.level,
             experience: user.experience,
             totalBattles: user.totalBattles,
@@ -141,13 +170,13 @@ export const PetController = {
     }
   },
 
-  // Upgrade pet level
+  // Upgrade pet level with blockchain integration
   async upgradePet(req, res) {
     try {
       const { petId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const userId = req.user._id || req.user.id;
 
-      const pet = await Pet.findOne({ _id: petId, owner: user._id });
+      const pet = await Pet.findOne({ _id: petId, ownerId: userId });
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -156,11 +185,14 @@ export const PetController = {
       }
 
       // Calculate upgrade cost
-      const upgradeCost = this.calculateUpgradeCost(pet.level);
-      if (user.coins < upgradeCost) {
+      const upgradeCost = PetController.calculateUpgradeCost(pet.level);
+
+      // Get user
+      const user = await User.findById(userId);
+      if (user.balance < upgradeCost) {
         return res.status(400).json({
           success: false,
-          message: `Not enough coins. Upgrade cost: ${upgradeCost}, You have: ${user.coins}`,
+          message: `Not enough coins. Upgrade cost: ${upgradeCost}, You have: ${user.balance}`,
         });
       }
 
@@ -175,23 +207,44 @@ export const PetController = {
         });
       }
 
+      // Handle blockchain pet level up
+      if (pet.blockchain?.tokenId) {
+        const result = await blockchainService.levelUpPet(
+          pet.blockchain.tokenId,
+          pet.blockchain.network || "polygon"
+        );
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            message: `Blockchain level up failed: ${result.error}`,
+          });
+        }
+      }
+
       // Perform upgrade
       const oldLevel = pet.level;
       pet.level += 1;
       pet.experience -= expNeeded;
 
-      // Improve stats on level up
-      const statIncrease = this.calculateStatIncrease(pet.tier, oldLevel);
-      pet.stats.attack = Math.floor(pet.stats.attack * (1 + statIncrease));
-      pet.stats.defense = Math.floor(pet.stats.defense * (1 + statIncrease));
-      pet.stats.speed = Math.floor(pet.stats.speed * (1 + statIncrease * 0.8));
-      pet.stats.health = Math.floor(
-        pet.stats.health * (1 + statIncrease * 1.2)
-      );
+      // Improve stats on level up using RNG service if available
+      const statIncrease =
+        serverRNGService.calculateStatIncrease?.(pet.rarity, oldLevel) ||
+        PetController.calculateStatIncrease(pet.rarity, oldLevel);
 
-      // Update user using User model methods
-      user.coins -= upgradeCost;
-      const expResult = user.addExperience(15); // 15 XP for upgrading pet
+      pet.stats.dmg = Math.floor(pet.stats.dmg * (1 + statIncrease));
+      pet.stats.hp = Math.floor(pet.stats.hp * (1 + statIncrease));
+      pet.stats.range = +(pet.stats.range * (1 + statIncrease * 0.8)).toFixed(
+        2
+      );
+      pet.stats.spa = +(pet.stats.spa * (1 - statIncrease * 0.1)).toFixed(2); // Lower SPA is better
+
+      // Update user balance
+      user.balance -= upgradeCost;
+
+      // Add user experience
+      user.experience += 15;
+      const leveledUp = PetController.checkLevelUp(user);
 
       await pet.save();
       await user.save();
@@ -211,23 +264,23 @@ export const PetController = {
             experience: pet.experience,
             stats: pet.stats,
             nextLevelExp: Math.pow(pet.level, 2) * 100,
-            power: serverRNGService.calculatePetPower(pet),
+            power:
+              serverRNGService.calculatePetPower?.(pet) ||
+              PetController.calculatePetPower(pet),
           },
           user: {
-            coins: user.coins,
+            coins: user.balance,
             level: user.level,
             experience: user.experience,
-            totalBattles: user.totalBattles,
-            winRate: user.winRate,
           },
         },
       };
 
       // Add level up notification if applicable
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+      if (leveledUp) {
+        responseData.message += ` You leveled up to level ${user.level}!`;
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.json(responseData);
@@ -245,9 +298,9 @@ export const PetController = {
     try {
       const { petId } = req.params;
       const { trainingType = "basic" } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const userId = req.user._id || req.user.id;
 
-      const pet = await Pet.findOne({ _id: petId, owner: user._id });
+      const pet = await Pet.findOne({ _id: petId, ownerId: userId });
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -255,21 +308,26 @@ export const PetController = {
         });
       }
 
-      // Calculate training cost and experience
-      const trainingData = this.calculateTrainingData(trainingType);
-      if (user.coins < trainingData.cost) {
+      // Calculate training cost and experience using RNG service if available
+      const trainingData =
+        serverRNGService.calculateTrainingData?.(trainingType) ||
+        PetController.calculateTrainingData(trainingType);
+
+      // Get user
+      const user = await User.findById(userId);
+      if (user.balance < trainingData.cost) {
         return res.status(400).json({
           success: false,
-          message: `Not enough coins. Training cost: ${trainingData.cost}, You have: ${user.coins}`,
+          message: `Not enough coins. Training cost: ${trainingData.cost}, You have: ${user.balance}`,
         });
       }
 
       // Perform training
       pet.experience += trainingData.experience;
-      user.coins -= trainingData.cost;
+      user.balance -= trainingData.cost;
+      user.experience += trainingData.userExperience;
 
-      // Add user experience for training
-      const expResult = user.addExperience(trainingData.userExperience);
+      const leveledUp = PetController.checkLevelUp(user);
 
       await pet.save();
       await user.save();
@@ -300,7 +358,7 @@ export const PetController = {
             ).toFixed(1),
           },
           user: {
-            coins: user.coins,
+            coins: user.balance,
             level: user.level,
             experience: user.experience,
           },
@@ -308,10 +366,10 @@ export const PetController = {
       };
 
       // Add level up notification if applicable
-      if (expResult.leveledUp) {
-        responseData.message += ` You leveled up to level ${expResult.newLevel}!`;
+      if (leveledUp) {
+        responseData.message += ` You leveled up to level ${user.level}!`;
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.json(responseData);
@@ -327,8 +385,8 @@ export const PetController = {
   // Fuse multiple pets to create a new one
   async fusePets(req, res) {
     try {
-      const { petIds, targetTier } = req.body;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const { petIds, targetRarity } = req.body;
+      const userId = req.user._id || req.user.id;
 
       // Validate input
       if (!petIds || petIds.length < 2 || petIds.length > 5) {
@@ -341,7 +399,7 @@ export const PetController = {
       // Get the pets to fuse
       const materialPets = await Pet.find({
         _id: { $in: petIds },
-        owner: user._id,
+        ownerId: userId,
       });
 
       if (materialPets.length !== petIds.length) {
@@ -351,8 +409,10 @@ export const PetController = {
         });
       }
 
-      // Calculate fusion requirements
-      const fusionData = this.calculateFusionData(materialPets, targetTier);
+      // Calculate fusion requirements using RNG service
+      const fusionData =
+        serverRNGService.calculateFusionData?.(materialPets, targetRarity) ||
+        PetController.calculateFusionData(materialPets, targetRarity);
 
       if (!fusionData.canFuse) {
         return res.status(400).json({
@@ -361,30 +421,25 @@ export const PetController = {
         });
       }
 
-      // Check if user can afford fusion
-      if (user.coins < fusionData.cost) {
+      // Get user
+      const user = await User.findById(userId);
+      if (user.balance < fusionData.cost) {
         return res.status(400).json({
           success: false,
-          message: `Not enough coins. Fusion cost: ${fusionData.cost}, You have: ${user.coins}`,
+          message: `Not enough coins. Fusion cost: ${fusionData.cost}, You have: ${user.balance}`,
         });
       }
 
-      // Determine fusion success
+      // Determine fusion success using RNG service
       const isSuccessful = Math.random() < fusionData.successChance;
 
       if (!isSuccessful) {
         // Failed fusion - lose material pets but get some consolation
         await Pet.deleteMany({ _id: { $in: petIds } });
-        user.coins -= fusionData.cost;
+        user.balance -= fusionData.cost;
+        user.experience += fusionData.consolationExp;
 
-        // Remove pets from user's collection
-        user.ownedPets = user.ownedPets.filter(
-          (petId) => !petIds.includes(petId.toString())
-        );
-
-        // Add consolation experience
-        const expResult = user.addExperience(fusionData.consolationExp);
-
+        const leveledUp = PetController.checkLevelUp(user);
         await user.save();
 
         const responseData = {
@@ -398,65 +453,48 @@ export const PetController = {
               consolationExp: fusionData.consolationExp,
             },
             user: {
-              coins: user.coins,
+              coins: user.balance,
               level: user.level,
               experience: user.experience,
             },
           },
         };
 
-        if (expResult.leveledUp) {
+        if (leveledUp) {
           responseData.data.user.leveledUp = true;
-          responseData.data.user.newLevel = expResult.newLevel;
+          responseData.data.user.newLevel = user.level;
         }
 
         return res.json(responseData);
       }
 
-      // Successful fusion - create new pet
-      const newPetData = serverRNGService.generatePetForDB(
-        user._id,
-        user.petsHatched
-      );
-      newPetData.tier = targetTier;
+      // SUCCESSFUL FUSION - Use RNG service to generate the new pet
+      const pityCounter = serverRNGService.getUserPityCounter?.(userId) || 0;
 
-      // Enhance stats based on material pets
-      const avgLevel =
-        materialPets.reduce((sum, pet) => sum + pet.level, 0) /
-        materialPets.length;
-      newPetData.level = Math.max(1, Math.floor(avgLevel * 0.8));
+      // Generate new pet using RNG service
+      const newPetData =
+        serverRNGService.generatePetForDB?.(userId, pityCounter) ||
+        PetController.generateFusionPet(userId, materialPets, targetRarity);
 
-      // Boost stats based on material pet quality
-      const qualityMultiplier = this.calculateQualityMultiplier(materialPets);
-      Object.keys(newPetData.stats).forEach((stat) => {
-        newPetData.stats[stat] = Math.floor(
-          newPetData.stats[stat] * qualityMultiplier
-        );
-      });
-
-      // Create new pet
-      const newPet = new Pet({
-        ...newPetData,
-        name: `Fused ${newPetData.type} ${newPetData.tier}`,
-      });
-
+      // Create new pet instance
+      const newPet = new Pet(newPetData);
       await newPet.save();
 
       // Remove material pets and update user
       await Pet.deleteMany({ _id: { $in: petIds } });
-      user.coins -= fusionData.cost;
-      user.ownedPets = user.ownedPets.filter(
-        (petId) => !petIds.includes(petId.toString())
-      );
-      user.ownedPets.push(newPet._id);
+      user.balance -= fusionData.cost;
+      user.experience += fusionData.successExp;
 
-      // Add fusion experience
-      const expResult = user.addExperience(fusionData.successExp);
+      // Reset pity counter on successful fusion
+      if (serverRNGService.resetUserPityCounter) {
+        serverRNGService.resetUserPityCounter(userId);
+      }
 
+      const leveledUp = PetController.checkLevelUp(user);
       await user.save();
 
       logger.info(
-        `User ${user.username} successfully fused ${petIds.length} pets into a ${targetTier} pet`
+        `User ${user.username} successfully fused ${petIds.length} pets into a ${targetRarity} pet`
       );
 
       const responseData = {
@@ -469,28 +507,18 @@ export const PetController = {
             successChance: fusionData.successChance,
             successExp: fusionData.successExp,
           },
-          newPet: {
-            id: newPet._id,
-            name: newPet.name,
-            tier: newPet.tier,
-            type: newPet.type,
-            level: newPet.level,
-            stats: newPet.stats,
-            abilities: newPet.abilities,
-            power: serverRNGService.calculatePetPower(newPet),
-          },
+          newPet: newPet.toJSON(),
           user: {
-            coins: user.coins,
+            coins: user.balance,
             level: user.level,
             experience: user.experience,
-            ownedPets: user.ownedPets.length,
           },
         },
       };
 
-      if (expResult.leveledUp) {
+      if (leveledUp) {
         responseData.data.user.leveledUp = true;
-        responseData.data.user.newLevel = expResult.newLevel;
+        responseData.data.user.newLevel = user.level;
       }
 
       res.json(responseData);
@@ -507,9 +535,9 @@ export const PetController = {
   async toggleFavorite(req, res) {
     try {
       const { petId } = req.params;
-      const user = await User.findById(req.user._id); // Get fresh instance
+      const userId = req.user._id || req.user.id;
 
-      const pet = await Pet.findOne({ _id: petId, owner: user._id });
+      const pet = await Pet.findOne({ _id: petId, ownerId: userId });
       if (!pet) {
         return res.status(404).json({
           success: false,
@@ -517,25 +545,18 @@ export const PetController = {
         });
       }
 
+      // Toggle favorite status
       pet.isFavorite = !pet.isFavorite;
       await pet.save();
 
       res.json({
         success: true,
-        message: `Pet ${
-          pet.isFavorite ? "added to" : "removed from"
-        } favorites`,
+        message: `Pet favorite status updated`,
         data: {
           pet: {
             id: pet._id,
             name: pet.name,
             isFavorite: pet.isFavorite,
-          },
-          user: {
-            favoritePets: await Pet.countDocuments({
-              owner: user._id,
-              isFavorite: true,
-            }),
           },
         },
       });
@@ -551,37 +572,31 @@ export const PetController = {
   // Get pet fusion calculator
   async getFusionCalculator(req, res) {
     try {
-      const user = await User.findById(req.user._id);
+      const userId = req.user._id || req.user.id;
+      const user = await User.findById(userId);
+
+      // Get drop rates from RNG service if available
+      const eggDropRates = serverRNGService.getEggDropRates?.("BASIC") || {};
 
       const calculator = {
         requirements: {
-          common: { minPets: 3, minLevel: 5, cost: 500 },
-          uncommon: { minPets: 3, minLevel: 10, cost: 1000 },
-          rare: { minPets: 4, minLevel: 15, cost: 2000 },
-          epic: { minPets: 4, minLevel: 20, cost: 5000 },
-          legendary: { minPets: 5, minLevel: 25, cost: 10000 },
-          Mythic: { minPets: 5, minLevel: 30, cost: 12000 },
-          Celestial: { minPets: 6, minLevel: 35, cost: 15000 },
-          Exotic: { minPets: 6, minLevel: 40, cost: 20000 },
-          Ultimate: { minPets: 7, minLevel: 45, cost: 22000 },
-          Godly: { minPets: 7, minLevel: 50, cost: 25000 },
+          uncommon: { minPets: 3, minLevel: 5, cost: 500 },
+          rare: { minPets: 3, minLevel: 10, cost: 1000 },
+          epic: { minPets: 4, minLevel: 15, cost: 2000 },
+          legendary: { minPets: 5, minLevel: 20, cost: 5000 },
         },
         successRates: {
-          Common: 0.6,
-          Uncommon: 0.2,
-          Rare: 0.1,
-          Epic: 0.04,
-          Legendary: 0.02,
-          Mythic: 0.01,
-          Celestial: 0.005,
-          Exotic: 0.0025,
-          Ultimate: 0.0015,
-          Godly: 0.001,
+          uncommon: 0.6,
+          rare: 0.3,
+          epic: 0.15,
+          legendary: 0.05,
         },
+        dropRates: eggDropRates,
         userStats: {
-          coins: user.coins,
-          totalPets: user.ownedPets.length,
-          maxPetLevel: await this.getMaxPetLevel(user._id),
+          coins: user.balance,
+          totalPets: await Pet.countDocuments({ ownerId: userId }),
+          maxPetLevel: await PetController.getMaxPetLevel(userId),
+          pityCounter: serverRNGService.getUserPityCounter?.(userId) || 0,
         },
       };
 
@@ -598,28 +613,189 @@ export const PetController = {
     }
   },
 
+  // Sync blockchain pets with local database
+  async syncBlockchainPets(req, res) {
+    try {
+      const user = await User.findById(req.user._id);
+
+      if (!user || !user.walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address required for blockchain sync",
+        });
+      }
+
+      const blockchainPets = await blockchainService.getOwnedPets(
+        user.walletAddress
+      );
+      let syncedCount = 0;
+
+      for (const blockchainPet of blockchainPets) {
+        // Check if we already have this pet in database
+        const existingPet = await Pet.findOne({
+          "blockchain.tokenId": blockchainPet.tokenId,
+          ownerId: user._id,
+        });
+
+        if (!existingPet) {
+          // Create local record for blockchain pet
+          const pet = new Pet({
+            ownerId: user._id,
+            name: blockchainPet.metadata.name,
+            type: blockchainPet.metadata.petType,
+            rarity: blockchainPet.metadata.rarity,
+            level: blockchainPet.metadata.level,
+            isShiny: blockchainPet.metadata.isShiny,
+            blockchain: {
+              tokenId: blockchainPet.tokenId,
+              contractAddress:
+                blockchainService.contracts.petNFT?.polygon?.address,
+              network: "polygon",
+            },
+            stats: {
+              dmg: 10 + (blockchainPet.metadata.level - 1) * 2,
+              hp: 50 + (blockchainPet.metadata.level - 1) * 5,
+              range: 1,
+              spa: 1.0,
+            },
+            experience: 0,
+          });
+
+          await pet.save();
+          syncedCount++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Synced ${syncedCount} blockchain pets`,
+        data: {
+          synced: syncedCount,
+          totalBlockchain: blockchainPets.length,
+        },
+      });
+    } catch (error) {
+      logger.error("Sync blockchain pets error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to sync blockchain pets",
+      });
+    }
+  },
+
+  // Get pet blockchain metadata
+  async getPetBlockchainInfo(req, res) {
+    try {
+      const { petId } = req.params;
+      const userId = req.user._id || req.user.id;
+
+      const pet = await Pet.findOne({ _id: petId, ownerId: userId });
+      if (!pet) {
+        return res.status(404).json({
+          success: false,
+          message: "Pet not found",
+        });
+      }
+
+      if (!pet.blockchain?.tokenId) {
+        return res.status(400).json({
+          success: false,
+          message: "This pet is not on the blockchain",
+        });
+      }
+
+      const metadata = await blockchainService.getPetMetadata(
+        pet.blockchain.tokenId,
+        pet.blockchain.network || "polygon"
+      );
+
+      if (!metadata) {
+        return res.status(404).json({
+          success: false,
+          message: "Blockchain metadata not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          pet: {
+            id: pet._id,
+            name: pet.name,
+            blockchain: pet.blockchain,
+          },
+          blockchainMetadata: metadata,
+        },
+      });
+    } catch (error) {
+      logger.error("Get pet blockchain info error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
   // Helper methods
+  async getPetsByRarity(userId) {
+    try {
+      const result = await Pet.aggregate([
+        { $match: { ownerId: userId } },
+        { $group: { _id: "$rarity", count: { $sum: 1 } } },
+      ]);
+
+      const rarities = {};
+      result.forEach((item) => {
+        rarities[item._id] = item.count;
+      });
+      return rarities;
+    } catch (error) {
+      console.error("getPetsByRarity error:", error);
+      return {};
+    }
+  },
+
+  async getPetsByType(userId) {
+    try {
+      const result = await Pet.aggregate([
+        { $match: { ownerId: userId } },
+        { $group: { _id: "$type", count: { $sum: 1 } } },
+      ]);
+
+      const types = {};
+      result.forEach((item) => {
+        types[item._id] = item.count;
+      });
+      return types;
+    } catch (error) {
+      console.error("getPetsByType error:", error);
+      return {};
+    }
+  },
+
+  calculatePetPower(pet) {
+    const { dmg, hp, range, spa } = pet.stats;
+    return Math.round(
+      (dmg * 2 + hp * 0.5 + range * 10 + (1 / spa) * 20) * (pet.level * 0.1)
+    );
+  },
+
   calculateUpgradeCost(level) {
     return level * 75; // 75 coins per level
   },
 
-  calculateStatIncrease(tier, level) {
+  calculateStatIncrease(rarity, level) {
     const baseIncrease = 0.08; // 8% base
-    const tierMultipliers = {
-      Common: 1.0,
-      Uncommon: 1.15,
-      Rare: 1.3,
-      Epic: 1.6,
-      Legendary: 2.0,
-      Mythic: 2.4,
-      Celestial: 2.8,
-      Exotic: 3.2,
-      Ultimate: 3.8,
-      Godly: 4.5,
+    const rarityMultipliers = {
+      common: 1.0,
+      uncommon: 1.15,
+      rare: 1.3,
+      epic: 1.6,
+      legendary: 2.0,
     };
     const levelBonus = Math.min(level * 0.005, 0.1); // Up to 10% bonus from level
 
-    return baseIncrease * (tierMultipliers[tier] || 1) + levelBonus;
+    return baseIncrease * (rarityMultipliers[rarity] || 1) + levelBonus;
   },
 
   calculateTrainingData(trainingType) {
@@ -631,24 +807,24 @@ export const PetController = {
     return trainingTypes[trainingType] || trainingTypes.basic;
   },
 
-  calculateFusionData(materialPets, targetTier) {
-    const tierRequirements = {
+  calculateFusionData(materialPets, targetRarity) {
+    const rarityRequirements = {
       uncommon: { minPets: 3, minLevel: 5, baseCost: 500 },
       rare: { minPets: 3, minLevel: 10, baseCost: 1000 },
       epic: { minPets: 4, minLevel: 15, baseCost: 2000 },
       legendary: { minPets: 5, minLevel: 20, baseCost: 5000 },
     };
 
-    const requirement = tierRequirements[targetTier];
+    const requirement = rarityRequirements[targetRarity];
     if (!requirement) {
-      return { canFuse: false, message: "Invalid target tier" };
+      return { canFuse: false, message: "Invalid target rarity" };
     }
 
     // Check basic requirements
     if (materialPets.length < requirement.minPets) {
       return {
         canFuse: false,
-        message: `Need at least ${requirement.minPets} pets for ${targetTier} fusion`,
+        message: `Need at least ${requirement.minPets} pets for ${targetRarity} fusion`,
       };
     }
 
@@ -658,40 +834,29 @@ export const PetController = {
     if (avgLevel < requirement.minLevel) {
       return {
         canFuse: false,
-        message: `Average pet level must be at least ${requirement.minLevel} for ${targetTier} fusion`,
+        message: `Average pet level must be at least ${requirement.minLevel} for ${targetRarity} fusion`,
       };
     }
 
     // Calculate success chance based on pet quality
     const totalValue = materialPets.reduce((sum, pet) => {
-      const tierValues = {
-        Common: 1.0,
-        Uncommon: 1.15,
-        Rare: 1.3,
-        Epic: 1.6,
-        Legendary: 2.0,
-        Mythic: 2.4,
-        Celestial: 2.8,
-        Exotic: 3.2,
-        Ultimate: 3.8,
-        Godly: 4.5,
+      const rarityValues = {
+        common: 1.0,
+        uncommon: 1.15,
+        rare: 1.3,
+        epic: 1.6,
+        legendary: 2.0,
       };
-      return sum + (tierValues[pet.tier] || 1) * pet.level;
+      return sum + (rarityValues[pet.rarity] || 1) * pet.level;
     }, 0);
 
     const baseSuccessRate =
       {
-        Common: 0.6,
-        Uncommon: 0.2,
-        Rare: 0.1,
-        Epic: 0.04,
-        Legendary: 0.02,
-        Mythic: 0.01,
-        Celestial: 0.005,
-        Exotic: 0.0025,
-        Ultimate: 0.0015,
-        Godly: 0.001,
-      }[targetTier] || 0.5;
+        uncommon: 0.6,
+        rare: 0.3,
+        epic: 0.15,
+        legendary: 0.05,
+      }[targetRarity] || 0.5;
 
     const successChance = Math.min(baseSuccessRate + totalValue * 0.01, 0.95);
     const cost = requirement.baseCost * materialPets.length;
@@ -705,57 +870,81 @@ export const PetController = {
     };
   },
 
+  generateFusionPet(userId, materialPets, targetRarity) {
+    const basePetData = {
+      ownerId: userId,
+      name: `Fused ${targetRarity} Pet`,
+      type: materialPets[0].type,
+      rarity: targetRarity,
+      level: 1,
+      experience: 0,
+      stats: {
+        dmg: 15,
+        hp: 60,
+        range: 1,
+        spa: 1.0,
+        critChance: 0,
+        critDamage: 0,
+        moneyBonus: 0,
+      },
+    };
+
+    // Enhance stats based on material pets
+    const avgLevel =
+      materialPets.reduce((sum, pet) => sum + pet.level, 0) /
+      materialPets.length;
+    basePetData.level = Math.max(1, Math.floor(avgLevel * 0.8));
+
+    // Boost stats based on material pet quality
+    const qualityMultiplier =
+      PetController.calculateQualityMultiplier(materialPets);
+    Object.keys(basePetData.stats).forEach((stat) => {
+      basePetData.stats[stat] = Math.floor(
+        basePetData.stats[stat] * qualityMultiplier
+      );
+    });
+
+    return basePetData;
+  },
+
   calculateQualityMultiplier(materialPets) {
     const totalValue = materialPets.reduce((sum, pet) => {
-      const tierValues = {
-        Common: 1.0,
-        Uncommon: 1.15,
-        Rare: 1.3,
-        Epic: 1.6,
-        Legendary: 2.0,
-        Mythic: 2.4,
-        Celestial: 2.8,
-        Exotic: 3.2,
-        Ultimate: 3.8,
-        Godly: 4.5,
+      const rarityValues = {
+        common: 1.0,
+        uncommon: 1.15,
+        rare: 1.3,
+        epic: 1.6,
+        legendary: 2.0,
       };
-      return sum + (tierValues[pet.tier] || 1);
+      return sum + (rarityValues[pet.rarity] || 1);
     }, 0);
 
     return 1 + (totalValue / materialPets.length - 1) * 0.3;
   },
 
   async getMaxPetLevel(userId) {
-    const maxLevelPet = await Pet.findOne({ owner: userId }).sort({
-      level: -1,
-    });
-    return maxLevelPet ? maxLevelPet.level : 0;
+    try {
+      const maxLevelPet = await Pet.findOne(
+        { ownerId: userId },
+        {},
+        { sort: { level: -1 } }
+      );
+      return maxLevelPet ? maxLevelPet.level : 0;
+    } catch (error) {
+      console.error("getMaxPetLevel error:", error);
+      return 0;
+    }
   },
 
-  async getPetsByTier(userId) {
-    const result = await Pet.aggregate([
-      { $match: { owner: userId } },
-      { $group: { _id: "$tier", count: { $sum: 1 } } },
-    ]);
+  checkLevelUp(user) {
+    const threshold = user.level * 100;
 
-    const tiers = {};
-    result.forEach((item) => {
-      tiers[item._id] = item.count;
-    });
-    return tiers;
-  },
-
-  async getPetsByType(userId) {
-    const result = await Pet.aggregate([
-      { $match: { owner: userId } },
-      { $group: { _id: "$type", count: { $sum: 1 } } },
-    ]);
-
-    const types = {};
-    result.forEach((item) => {
-      types[item._id] = item.count;
-    });
-    return types;
+    if (user.experience >= threshold) {
+      user.level += 1;
+      user.experience -= threshold;
+      return true;
+    }
+    return false;
   },
 };
 

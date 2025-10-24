@@ -1,4 +1,4 @@
-// client/src/services/api.js
+// client/src/services/api.jsx
 import axios from "axios";
 import { API_BASE_URL } from "../utils/constants";
 
@@ -36,7 +36,7 @@ api.interceptors.response.use(
 );
 
 export const gameAPI = {
-  // Auth endpoints
+  // Auth endpoints - UPDATED
   auth: {
     register: (userData) => api.post("/auth/register", userData),
     login: (credentials) => api.post("/auth/login", credentials),
@@ -44,13 +44,14 @@ export const gameAPI = {
       api.post("/auth/wallet/register", walletData),
     walletLogin: (walletData) => api.post("/auth/wallet/login", walletData),
     guestLogin: (username) => api.post("/auth/guest", { username }),
+    getNonce: () => api.post("/auth/nonce"), // NEW
     getProfile: () => api.get("/auth/profile"),
     updateProfile: (profileData) => api.put("/auth/profile", profileData),
     connectWallet: (walletData) => api.post("/auth/wallet/connect", walletData),
     refreshToken: () => api.post("/auth/refresh"),
   },
 
-  // Game endpoints
+  // Game endpoints - UPDATED
   game: {
     // Egg Management
     hatchEgg: (eggData) => api.post("/game/eggs/hatch", eggData),
@@ -60,6 +61,21 @@ export const gameAPI = {
     getBattleHistory: (params = {}) =>
       api.get("/game/battles/history", { params }),
     getAvailableBattlePets: () => api.get("/game/battles/available-pets"),
+
+    // Blockchain Integration - NEW
+    connectWallet: (walletData) => api.post("/game/wallet/connect", walletData),
+    disconnectWallet: () => api.post("/game/wallet/disconnect"),
+    getBlockchainAssets: () => api.get("/game/blockchain/assets"),
+
+    // Marketplace - NEW
+    listOnMarketplace: (listingData) =>
+      api.post("/game/marketplace/list", listingData),
+    buyFromMarketplace: (purchaseData) =>
+      api.post("/game/marketplace/buy", purchaseData),
+    getMarketplaceListings: (params = {}) =>
+      api.get("/game/marketplace/listings", { params }),
+    cancelMarketplaceListing: (cancelData) =>
+      api.post("/game/marketplace/cancel", cancelData),
 
     // Quest System
     getAvailableQuests: () => api.get("/game/quests/available"),
@@ -80,18 +96,21 @@ export const gameAPI = {
     equipPetItem: (equipData) => api.post("/game/pets/equip-item", equipData),
   },
 
-  // Pet endpoints
+  // Pet endpoints - UPDATED
   pets: {
     getUserPets: (params = {}) => api.get("/pets", { params }),
     getPetDetails: (petId) => api.get(`/pets/${petId}`),
     upgradePet: (petId, upgradeData) =>
       api.post(`/pets/${petId}/upgrade`, upgradeData),
+    trainPet: (petId, trainData) => api.post(`/pets/${petId}/train`, trainData), // NEW
     fusePets: (fusionData) => api.post("/pets/fuse", fusionData),
     toggleFavorite: (petId) => api.patch(`/pets/${petId}/favorite`),
     getFusionCalculator: () => api.get("/pets/fusion/calculator"),
+    syncBlockchainPets: () => api.post("/pets/blockchain/sync"), // NEW
+    getPetBlockchainInfo: (petId) => api.get(`/pets/${petId}/blockchain`), // NEW
   },
 
-  // Egg endpoints
+  // Egg endpoints - UPDATED
   eggs: {
     getUserEggs: (params = {}) => api.get("/eggs", { params }),
     getEggDetails: (eggId) => api.get(`/eggs/${eggId}`),
@@ -102,20 +121,32 @@ export const gameAPI = {
     applyCosmetic: (eggId, cosmeticData) =>
       api.patch(`/eggs/${eggId}/cosmetic`, cosmeticData),
     getEggCatalog: () => api.get("/eggs/catalog/catalog"),
+    syncBlockchainEggs: () => api.post("/eggs/blockchain/sync"), // NEW
   },
 
-  // Trade endpoints
+  // Trade endpoints - UPDATED
   trade: {
+    // Public routes
     getListings: (params = {}) => api.get("/trade/listings", { params }),
     getMarketplaceStats: () => api.get("/trade/stats"),
+
+    // User data
     getUserListings: (params = {}) => api.get("/trade/my-listings", { params }),
     getTradeHistory: (params = {}) => api.get("/trade/history", { params }),
     getTransactionHistory: (params = {}) =>
       api.get("/trade/transactions", { params }),
     getUserOffers: (params = {}) => api.get("/trade/offers", { params }),
+
+    // Pet trading
     listPet: (listingData) => api.post("/trade/list", listingData),
     cancelListing: (tradeId) => api.delete(`/trade/list/${tradeId}`),
     purchasePet: (tradeId) => api.post(`/trade/purchase/${tradeId}`),
+
+    // Item trading - NEW
+    listItem: (itemData) => api.post("/trade/list-item", itemData),
+    purchaseItem: (tradeId) => api.post(`/trade/purchase-item/${tradeId}`),
+
+    // Offer management
     makeOffer: (offerData) => api.post("/trade/offer", offerData),
     acceptOffer: (offerId, responseData = {}) =>
       api.post(`/trade/offer/${offerId}/accept`, responseData),
@@ -124,9 +155,15 @@ export const gameAPI = {
     counterOffer: (offerId, counterData) =>
       api.post(`/trade/offer/${offerId}/counter`, counterData),
     cancelOffer: (offerId) => api.delete(`/trade/offer/${offerId}`),
+
+    // Blockchain integration - NEW
+    getUserNFTs: () => api.get("/trade/nfts"),
+    syncBlockchainListings: () => api.post("/trade/sync-blockchain"),
+    verifyOwnership: (tokenId, nftContract) =>
+      api.get(`/trade/verify-ownership/${tokenId}/${nftContract}`),
   },
 
-  // Admin endpoints
+  // Admin endpoints - UPDATED
   admin: {
     getStats: () => api.get("/admin/stats"),
     updateSettings: (settingsData) =>
@@ -165,6 +202,16 @@ export const validateData = (data, schemaName) => {
       if (!data.questId) errors.push("Quest ID is required");
       return errors;
     },
+    tradeCreation: (data) => {
+      const errors = [];
+      if (!data.petId && !data.itemId) {
+        errors.push("Either petId or itemId is required");
+      }
+      if (!data.price || data.price <= 0) {
+        errors.push("Valid price is required");
+      }
+      return errors;
+    },
   };
 
   const validator = validations[schemaName];
@@ -179,8 +226,17 @@ export const validateData = (data, schemaName) => {
   };
 };
 
-// Simple error handler for user-friendly messages
+// Enhanced error handler for user-friendly messages
 export const handleApiError = (error) => {
+  // Handle validation errors from backend
+  if (error.response?.data?.errors) {
+    const validationErrors = error.response.data.errors;
+    if (Array.isArray(validationErrors)) {
+      return validationErrors.join(", ");
+    }
+    return Object.values(validationErrors).join(", ");
+  }
+
   if (error.response?.data?.message) {
     return error.response.data.message;
   }
@@ -191,6 +247,17 @@ export const handleApiError = (error) => {
     return "Request timed out. Please try again.";
   }
   return "An unexpected error occurred. Please try again.";
+};
+
+// Helper for handling API responses consistently
+export const handleApiResponse = (response) => {
+  if (response.data && response.data.success !== undefined) {
+    return response.data;
+  }
+  return {
+    success: true,
+    data: response.data,
+  };
 };
 
 export default api;

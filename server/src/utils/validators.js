@@ -50,12 +50,24 @@ export const petUpgradeSchema = Joi.object({
   materialPets: Joi.array().items(Joi.string()).min(1).max(5).required(),
 });
 
-// Trade validation schemas
-export const tradeCreationSchema = Joi.object({
-  petId: Joi.string().required(),
-  price: Joi.number().min(0.001).max(1000).required(),
-  currency: Joi.string().valid("ETH", "MATIC", "USDC").default("ETH"),
-});
+// utils/validators.js - Add this schema
+export const itemListingSchema = {
+  body: Joi.object({
+    itemId: Joi.string().required(),
+    itemType: Joi.string().valid("pet", "egg", "technique", "skin").required(),
+    price: Joi.number().min(0.01).required(),
+    currency: Joi.string().valid("coins", "ETH", "MATIC").default("ETH"),
+  }),
+};
+
+// Update existing tradeCreationSchema if needed
+export const tradeCreationSchema = {
+  body: Joi.object({
+    petId: Joi.string().required(),
+    price: Joi.number().min(0.01).required(),
+    currency: Joi.string().valid("coins", "ETH", "MATIC").default("ETH"),
+  }),
+};
 
 export const validate = (schema) => {
   return (req, res, next) => {

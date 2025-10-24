@@ -11,42 +11,31 @@ const router = express.Router();
 // All routes require authentication
 router.use(authMiddleware);
 
-// Get user's pets
+// ===== PET COLLECTION MANAGEMENT =====
 router.get("/", PetController.getUserPets);
-
-// Get specific pet
 router.get("/:petId", PetController.getPetDetails);
 
-// Upgrade pet
+// ===== PET UPGRADES & TRAINING =====
 router.post("/:petId/upgrade", gameActionLimiter, PetController.upgradePet);
+router.post("/:petId/train", gameActionLimiter, PetController.trainPet);
 
-// // Train pet
-// router.post(
-//   "/:petId/train",
-//   gameActionLimiter,
-//   validate(petTrainSchema),
-//   PetController.trainPet
-// );
+// ===== PET FUSION SYSTEM =====
+router.post("/fuse", gameActionLimiter, PetController.fusePets);
+router.get("/fusion/calculator", PetController.getFusionCalculator);
 
-// Fuse pets
-router.post(
-  "/fuse",
-  gameActionLimiter,
-  validate(petUpgradeSchema),
-  PetController.fusePets
-);
-
-// Toggle favorite
+// ===== FAVORITES MANAGEMENT =====
 router.patch(
   "/:petId/favorite",
   gameActionLimiter,
   PetController.toggleFavorite
 );
 
-// Get fusion calculator
-router.get("/fusion/calculator", PetController.getFusionCalculator);
-
-// // Get pet statistics
-// router.get("/stats/overview", PetController.getPetStats);
+// ===== BLOCKCHAIN INTEGRATION =====
+router.post(
+  "/blockchain/sync",
+  gameActionLimiter,
+  PetController.syncBlockchainPets
+);
+router.get("/:petId/blockchain", PetController.getPetBlockchainInfo);
 
 export default router;

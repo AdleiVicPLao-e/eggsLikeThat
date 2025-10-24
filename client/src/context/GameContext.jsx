@@ -82,8 +82,6 @@ export const GameProvider = ({ children }) => {
   const syncBlockchainData = useCallback(async () => {
     if (!user?.walletAddress) return;
     try {
-      // This would be your blockchain integration
-      // const blockchainPets = await blockchain.getOwnedPets(user.walletAddress);
       console.log("Syncing blockchain data for:", user.walletAddress);
       setLastSync(new Date().toISOString());
     } catch (error) {
@@ -242,12 +240,8 @@ export const GameProvider = ({ children }) => {
   );
 
   const handleFeedPet = useCallback(async (petId, foodItem) => {
-    // This would be implemented based on your API
     try {
-      // Example implementation
       console.log("Feeding pet:", petId, foodItem);
-      // const result = await gameAPI.feedPet(petId, foodItem);
-      // return result;
     } catch (error) {
       console.error("Error feeding pet:", error);
       throw error;
@@ -318,10 +312,13 @@ export const GameProvider = ({ children }) => {
       trainPet: gameAPI.trainPet,
       fusePets: gameAPI.fusePets,
 
-      // Eggs
+      // Eggs - ADD ALL EGG METHODS
       getUserEggs: gameAPI.getUserEggs,
       purchaseEgg: gameAPI.purchaseEgg,
       getFreeEgg: gameAPI.getFreeEgg,
+      getEggCatalog: gameAPI.getEggCatalog, // ADD THIS
+      hatchEgg: gameAPI.hatchEgg, // ADD THIS
+      previewEgg: gameAPI.previewEgg, // ADD THIS
 
       // Game
       startBattle: gameAPI.startBattle,

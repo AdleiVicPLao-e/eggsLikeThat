@@ -1,8 +1,11 @@
-import { User } from "../models/User.js";
+// src/controllers/AuthController.js
+import { DatabaseService } from "../services/DatabaseService.js";
+import { blockchainService } from "../config/blockchain.js";
 import { mailService } from "../services/MailService.js";
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 import { config } from "../config/env.js";
+import { ethers } from "ethers";
 
 // Helper functions
 const generateToken = (payload, expiresIn = "7d") => {
@@ -13,11 +16,18 @@ const generateNonce = () => {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
-const verifyWalletSignature = (walletAddress, message, signature) => {
-  // In a real implementation, you would verify the signature
-  // using ethers.js or web3.js
-  // For now, we'll return true for demo purposes
-  return true;
+// Real wallet signature verification using ethers.js
+const verifyWalletSignature = async (walletAddress, message, signature) => {
+  try {
+    // Recover the address from the signature
+    const recoveredAddress = ethers.verifyMessage(message, signature);
+
+    // Check if the recovered address matches the claimed wallet address
+    return recoveredAddress.toLowerCase() === walletAddress.toLowerCase();
+  } catch (error) {
+    logger.error("Signature verification error:", error);
+    return false;
+  }
 };
 
 export const AuthController = {
@@ -33,8 +43,10 @@ export const AuthController = {
         });
       }
 
+      const dbService = new DatabaseService();
+
       // Find user by email
-      const user = await User.findOne({ email: email.toLowerCase() });
+      const user = await dbService.findUserByEmail(email.toLowerCase());
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -53,13 +65,12 @@ export const AuthController = {
 
       // Generate JWT token
       const token = generateToken({
-        userId: user._id,
+        userId: user._id || user.id,
         email: user.email,
       });
 
       // Update last login
-      user.lastLogin = new Date();
-      await user.save();
+      await user.updateLastLogin();
 
       logger.info(`User logged in via email: ${user.email}`);
 
@@ -68,7 +79,7 @@ export const AuthController = {
         message: "Login successful",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             email: user.email,
             walletAddress: user.walletAddress,
@@ -76,6 +87,7 @@ export const AuthController = {
             coins: user.balance,
             freeRolls: user.freeRolls || 0,
             experience: user.experience,
+            isGuest: user.isGuest,
           },
           token,
         },
@@ -101,31 +113,42 @@ export const AuthController = {
         });
       }
 
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [
-          { email: email.toLowerCase() },
-          { username: username.toLowerCase() },
-        ],
-      });
+      const dbService = new DatabaseService();
 
-      if (existingUser) {
+      // Check if user already exists
+      const existingUserByEmail = await dbService.findUserByEmail(
+        email.toLowerCase()
+      );
+      const existingUserByUsername = await dbService.findUserByUsername(
+        username.toLowerCase()
+      );
+
+      if (existingUserByEmail) {
         return res.status(400).json({
           success: false,
-          message:
-            existingUser.email === email.toLowerCase()
-              ? "Email already registered"
-              : "Username already taken",
+          message: "Email already registered",
+        });
+      }
+
+      if (existingUserByUsername) {
+        return res.status(400).json({
+          success: false,
+          message: "Username already taken",
         });
       }
 
       // Create new user with wallet
-      const user = await User.createWithWallet(username, email, password);
-      await user.save();
+      const user = await dbService.createUser({
+        username,
+        email: email.toLowerCase(),
+        passwordHash: await dbService.hashPassword(password),
+        balance: 1000,
+        freeRolls: 3,
+      });
 
       // Generate JWT token
       const token = generateToken({
-        userId: user._id,
+        userId: user._id || user.id,
         email: user.email,
       });
 
@@ -141,7 +164,7 @@ export const AuthController = {
         message: "User registered successfully",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             email: user.email,
             walletAddress: user.walletAddress,
@@ -164,48 +187,64 @@ export const AuthController = {
   // Connect existing wallet to user account
   async connectWallet(req, res) {
     try {
-      const { walletAddress, signature } = req.body;
-      const user = req.user;
+      const { walletAddress, signature, message } = req.body;
+      const dbService = new DatabaseService();
 
-      if (!walletAddress) {
+      if (!walletAddress || !signature) {
         return res.status(400).json({
           success: false,
-          message: "Wallet address is required",
+          message: "Wallet address and signature are required",
+        });
+      }
+
+      // Get user from request (assuming middleware sets req.user)
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "User authentication required",
         });
       }
 
       // Check if wallet is already connected to another account
-      const existingUser = await User.findOne({
-        walletAddress: walletAddress.toLowerCase(),
-      });
-
-      if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+      const existingUser = await dbService.findUserByWallet(
+        walletAddress.toLowerCase()
+      );
+      if (
+        existingUser &&
+        (existingUser._id || existingUser.id).toString() !==
+          (user._id || user.id).toString()
+      ) {
         return res.status(400).json({
           success: false,
           message: "Wallet address already connected to another account",
         });
       }
 
-      // Verify signature if provided
-      if (signature) {
-        const message = `Connect wallet to PetVerse - Nonce: ${generateNonce()}`;
-        const isValid = verifyWalletSignature(
-          walletAddress,
-          message,
-          signature
-        );
+      // Verify signature
+      const verificationMessage =
+        message ||
+        `Connect wallet to PetVerse - User ID: ${
+          user._id || user.id
+        } - Nonce: ${generateNonce()}`;
+      const isValid = await verifyWalletSignature(
+        walletAddress,
+        verificationMessage,
+        signature
+      );
 
-        if (!isValid) {
-          return res.status(401).json({
-            success: false,
-            message: "Invalid signature",
-          });
-        }
+      if (!isValid) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid signature",
+        });
       }
 
       // Update user's wallet address
-      user.walletAddress = walletAddress.toLowerCase();
-      await user.save();
+      await dbService.connectWallet(user._id || user.id, walletAddress);
+
+      // Sync blockchain assets
+      await this.syncBlockchainAssets(walletAddress, user._id || user.id);
 
       logger.info(
         `Wallet connected for user: ${user.username} (${walletAddress})`
@@ -216,9 +255,9 @@ export const AuthController = {
         message: "Wallet connected successfully",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
-            walletAddress: user.walletAddress,
+            walletAddress: walletAddress.toLowerCase(),
           },
         },
       });
@@ -231,41 +270,77 @@ export const AuthController = {
     }
   },
 
-  // Register new user (wallet-based) - existing method
+  // Register new user (wallet-based)
   async register(req, res) {
     try {
-      const { walletAddress, username, email } = req.body;
+      const { walletAddress, username, email, signature, message } = req.body;
 
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [{ walletAddress: walletAddress.toLowerCase() }, { username }],
-      });
-
-      if (existingUser) {
+      if (!walletAddress || !username) {
         return res.status(400).json({
           success: false,
-          message:
-            existingUser.walletAddress === walletAddress.toLowerCase()
-              ? "Wallet already registered"
-              : "Username already taken",
+          message: "Wallet address and username are required",
         });
       }
 
+      const dbService = new DatabaseService();
+
+      // Check if user already exists
+      const existingUserByWallet = await dbService.findUserByWallet(
+        walletAddress.toLowerCase()
+      );
+      const existingUserByUsername = await dbService.findUserByUsername(
+        username
+      );
+
+      if (existingUserByWallet) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet already registered",
+        });
+      }
+
+      if (existingUserByUsername) {
+        return res.status(400).json({
+          success: false,
+          message: "Username already taken",
+        });
+      }
+
+      // Verify signature if provided
+      if (signature) {
+        const verificationMessage =
+          message ||
+          `Register to PetVerse - Username: ${username} - Nonce: ${generateNonce()}`;
+        const isValid = await verifyWalletSignature(
+          walletAddress,
+          verificationMessage,
+          signature
+        );
+
+        if (!isValid) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid signature",
+          });
+        }
+      }
+
       // Create new user
-      const user = new User({
+      const user = await dbService.createUser({
         walletAddress: walletAddress.toLowerCase(),
         username,
-        email,
+        email: email?.toLowerCase(),
         // Free starting resources
         balance: 1000,
         freeRolls: 3,
       });
 
-      await user.save();
+      // Sync blockchain assets
+      await this.syncBlockchainAssets(walletAddress, user._id || user.id);
 
       // Generate JWT token
       const token = generateToken({
-        userId: user._id,
+        userId: user._id || user.id,
         walletAddress: user.walletAddress,
       });
 
@@ -281,7 +356,7 @@ export const AuthController = {
         message: "User registered successfully",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             walletAddress: user.walletAddress,
             level: user.level,
@@ -300,15 +375,24 @@ export const AuthController = {
     }
   },
 
-  // Wallet login - existing method
+  // Wallet login
   async walletLogin(req, res) {
     try {
-      const { walletAddress, signature } = req.body;
+      const { walletAddress, signature, message } = req.body;
+
+      if (!walletAddress || !signature) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address and signature are required",
+        });
+      }
+
+      const dbService = new DatabaseService();
 
       // Find user by wallet address
-      const user = await User.findOne({
-        walletAddress: walletAddress.toLowerCase(),
-      });
+      const user = await dbService.findUserByWallet(
+        walletAddress.toLowerCase()
+      );
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -316,32 +400,33 @@ export const AuthController = {
         });
       }
 
-      // In a real implementation, verify the signature against a nonce
-      if (signature) {
-        const message = `Login to PetVerse - Nonce: ${generateNonce()}`;
-        const isValid = verifyWalletSignature(
-          walletAddress,
-          message,
-          signature
-        );
+      // Verify signature
+      const verificationMessage =
+        message || `Login to PetVerse - Nonce: ${generateNonce()}`;
+      const isValid = await verifyWalletSignature(
+        walletAddress,
+        verificationMessage,
+        signature
+      );
 
-        if (!isValid) {
-          return res.status(401).json({
-            success: false,
-            message: "Invalid signature",
-          });
-        }
+      if (!isValid) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid signature",
+        });
       }
+
+      // Sync blockchain assets
+      await this.syncBlockchainAssets(walletAddress, user._id || user.id);
 
       // Generate JWT token
       const token = generateToken({
-        userId: user._id,
+        userId: user._id || user.id,
         walletAddress: user.walletAddress,
       });
 
       // Update last login
-      user.lastLogin = new Date();
-      await user.save();
+      await user.updateLastLogin();
 
       logger.info(`User logged in: ${user.username} (${walletAddress})`);
 
@@ -350,19 +435,20 @@ export const AuthController = {
         message: "Login successful",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             walletAddress: user.walletAddress,
             level: user.level,
             coins: user.balance,
             freeRolls: user.freeRolls,
             experience: user.experience,
+            isGuest: user.isGuest,
           },
           token,
         },
       });
     } catch (error) {
-      logger.error("Login error:", error);
+      logger.error("Wallet login error:", error);
       res.status(500).json({
         success: false,
         message: "Internal server error during login",
@@ -370,18 +456,23 @@ export const AuthController = {
     }
   },
 
-  // Guest login - existing method (updated for consistency)
+  // Guest login
   async guestLogin(req, res) {
     try {
       const { username } = req.body;
 
-      // Generate a temporary wallet address for guest users
-      const tempWallet = `guest_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
+      if (!username || username.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Username is required",
+        });
+      }
+
+      const cleanUsername = username.trim();
+      const dbService = new DatabaseService();
 
       // Check if username is available
-      const existingUser = await User.findOne({ username });
+      const existingUser = await dbService.findUserByUsername(cleanUsername);
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -389,35 +480,38 @@ export const AuthController = {
         });
       }
 
+      // Generate a temporary wallet address for guest users
+      const tempWallet = `guest_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       // Create guest user
-      const user = new User({
+      const user = await dbService.createUser({
         walletAddress: tempWallet,
-        username,
+        username: cleanUsername,
         isGuest: true,
         balance: 500, // Less coins for guest users
         freeRolls: 1,
       });
 
-      await user.save();
-
       // Generate JWT token (shorter expiry for guest users)
       const token = generateToken(
         {
-          userId: user._id,
+          userId: user._id || user.id,
           walletAddress: user.walletAddress,
           isGuest: true,
         },
         "24h"
       ); // 24 hour expiry for guests
 
-      logger.info(`Guest user created: ${username}`);
+      logger.info(`Guest user created: ${cleanUsername}`);
 
       res.status(201).json({
         success: true,
         message: "Guest session started",
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             isGuest: true,
             level: user.level,
@@ -436,13 +530,11 @@ export const AuthController = {
     }
   },
 
-  // Get user profile - existing method (updated for consistency)
+  // Get user profile
   async getProfile(req, res) {
     try {
-      const user = await User.findById(req.user._id)
-        .select("-__v -passwordHash")
-        .populate("pets", "name tier type level stats")
-        .populate("eggs", "eggType rarity isHatched");
+      const dbService = new DatabaseService();
+      const user = await dbService.findUserById(req.user._id || req.user.id);
 
       if (!user) {
         return res.status(404).json({
@@ -451,11 +543,14 @@ export const AuthController = {
         });
       }
 
+      // Get user stats
+      const stats = await dbService.getUserStats(user._id || user.id);
+
       res.json({
         success: true,
         data: {
           user: {
-            id: user._id,
+            id: user._id || user.id,
             username: user.username,
             walletAddress: user.walletAddress,
             email: user.email,
@@ -470,9 +565,12 @@ export const AuthController = {
             winRate: user.winRate,
             pets: user.pets,
             eggs: user.eggs,
-            preferences: user.preferences,
+            techniques: user.techniques,
+            skins: user.skins,
+            isGuest: user.isGuest,
             createdAt: user.createdAt,
           },
+          stats,
         },
       });
     } catch (error) {
@@ -484,45 +582,49 @@ export const AuthController = {
     }
   },
 
-  // Update user profile - existing method
+  // Update user profile
   async updateProfile(req, res) {
     try {
-      const { username, email, preferences } = req.body;
-      const user = req.user;
+      const { username, email } = req.body;
+      const dbService = new DatabaseService();
+
+      const user = await dbService.findUserById(req.user._id || req.user.id);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
 
       // Check if username is available (if changing)
       if (username && username !== user.username) {
-        const existingUser = await User.findOne({ username });
+        const existingUser = await dbService.findUserByUsername(username);
         if (existingUser) {
           return res.status(400).json({
             success: false,
             message: "Username already taken",
           });
         }
-        user.username = username;
       }
 
-      // Update email if provided
-      if (email !== undefined) {
-        user.email = email;
-      }
+      // Update user
+      const updateData = {};
+      if (username) updateData.username = username;
+      if (email !== undefined) updateData.email = email;
 
-      // Update preferences if provided
-      if (preferences) {
-        user.preferences = { ...user.preferences, ...preferences };
-      }
-
-      await user.save();
+      const updatedUser = await dbService.updateUser(
+        user._id || user.id,
+        updateData
+      );
 
       res.json({
         success: true,
         message: "Profile updated successfully",
         data: {
           user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            preferences: user.preferences,
+            id: updatedUser._id || updatedUser.id,
+            username: updatedUser.username,
+            email: updatedUser.email,
           },
         },
       });
@@ -535,7 +637,7 @@ export const AuthController = {
     }
   },
 
-  // Refresh token - existing method
+  // Refresh token
   async refreshToken(req, res) {
     try {
       const user = req.user;
@@ -543,11 +645,11 @@ export const AuthController = {
       // Generate new token
       const token = generateToken(
         {
-          userId: user._id,
+          userId: user._id || user.id,
           walletAddress: user.walletAddress,
           isGuest: user.isGuest,
         },
-        user.isGuest ? "24h" : undefined
+        user.isGuest ? "24h" : "7d"
       );
 
       res.json({
@@ -560,6 +662,84 @@ export const AuthController = {
         success: false,
         message: "Internal server error",
       });
+    }
+  },
+
+  // Get nonce for wallet authentication
+  async getNonce(req, res) {
+    try {
+      const { walletAddress } = req.body;
+
+      if (!walletAddress) {
+        return res.status(400).json({
+          success: false,
+          message: "Wallet address is required",
+        });
+      }
+
+      const nonce = generateNonce();
+      const message = `Sign this message to authenticate with PetVerse. Nonce: ${nonce}`;
+
+      // In a real implementation, you might want to store this nonce temporarily
+      // to prevent replay attacks
+
+      res.json({
+        success: true,
+        data: {
+          nonce,
+          message,
+          walletAddress,
+        },
+      });
+    } catch (error) {
+      logger.error("Get nonce error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+
+  // Helper method to sync blockchain assets with user account
+  async syncBlockchainAssets(walletAddress, userId) {
+    try {
+      const dbService = new DatabaseService();
+
+      // Sync pets from blockchain
+      const blockchainPets = await blockchainService.getOwnedPets(
+        walletAddress
+      );
+
+      // Sync eggs from blockchain
+      const blockchainEggs = await blockchainService.getOwnedEggs(
+        walletAddress
+      );
+
+      // Sync skins from blockchain
+      const blockchainSkins = await blockchainService.getOwnedSkins(
+        walletAddress
+      );
+
+      // Sync techniques from blockchain
+      const blockchainTechniques = await blockchainService.getOwnedTechniques(
+        walletAddress
+      );
+
+      // Here you would update the user's assets in the database
+      // This is a simplified version - you'd need to implement the actual sync logic
+      logger.info(
+        `Synced blockchain assets for user ${userId}: ${blockchainPets.length} pets, ${blockchainEggs.length} eggs`
+      );
+
+      return {
+        pets: blockchainPets.length,
+        eggs: blockchainEggs.length,
+        skins: blockchainSkins.length,
+        techniques: blockchainTechniques.length,
+      };
+    } catch (error) {
+      logger.error("Error syncing blockchain assets:", error);
+      return { error: error.message };
     }
   },
 };

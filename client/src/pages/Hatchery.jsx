@@ -2,15 +2,24 @@ import React, { useState, useEffect } from "react";
 import { useUser } from "../context/UserContext";
 import { useGame } from "../context/GameContext";
 import { useWallet } from "../hooks/useWallet";
+import { gameAPI as directAPI } from "../services/api";
 import PetCard from "../components/Pets/PetCard";
 import HatchAnimation from "../components/Game/HatchAnimation";
 import { Coins, Zap, Gift, Sparkles, ShoppingCart, Wallet } from "lucide-react";
 import { EGG_TYPES, PET_RARITIES, CURRENCIES } from "../utils/constants";
 
 const Hatchery = () => {
-  const { user, isAuthenticated, updateProfile } = useUser();
-  const { pets, eggs, addPet, addEgg, updateCoins, updateFreeRolls, gameAPI } =
-    useGame();
+  const { user, isAuthenticated } = useUser();
+  const {
+    pets,
+    eggs,
+    addPet,
+    addEgg,
+    updateCoins,
+    updateFreeRolls,
+    gameAPI,
+    loadGameData,
+  } = useGame();
   const {
     account,
     isConnected,
@@ -26,17 +35,19 @@ const Hatchery = () => {
   const [newlyHatchedPet, setNewlyHatchedPet] = useState(null);
   const [showHatchAnimation, setShowHatchAnimation] = useState(false);
   const [selectedEggType, setSelectedEggType] = useState(EGG_TYPES.BASIC);
-  const [eggPreview, setEggPreview] = useState(null);
+  const [eggCatalog, setEggCatalog] = useState(null);
   const [useBlockchainHatch, setUseBlockchainHatch] = useState(false);
   const [isHatching, setIsHatching] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [blockchainPets, setBlockchainPets] = useState([]);
   const [blockchainEggs, setBlockchainEggs] = useState([]);
 
-  // Load egg preview from API when egg type changes
+  // Load egg catalog when component mounts
   useEffect(() => {
-    loadEggPreview();
-  }, [selectedEggType]);
+    if (isAuthenticated) {
+      loadEggCatalog();
+    }
+  }, [isAuthenticated]);
 
   // Load blockchain NFTs when wallet connects
   useEffect(() => {
@@ -45,20 +56,15 @@ const Hatchery = () => {
     }
   }, [isConnected, account]);
 
-  const loadEggPreview = async () => {
+  const loadEggCatalog = async () => {
     try {
-      // This would call your API to get egg preview data
-      // For now, we'll set a placeholder
-      setEggPreview([
-        { tier: PET_RARITIES.COMMON, type: "dragon", probability: "40%" },
-        { tier: PET_RARITIES.UNCOMMON, type: "phoenix", probability: "25%" },
-        { tier: PET_RARITIES.RARE, type: "unicorn", probability: "15%" },
-        { tier: PET_RARITIES.EPIC, type: "griffin", probability: "10%" },
-        { tier: PET_RARITIES.LEGENDARY, type: "dragon", probability: "7%" },
-        { tier: PET_RARITIES.MYTHIC, type: "phoenix", probability: "3%" },
-      ]);
+      // Use direct API import for missing methods
+      const result = await directAPI.eggs.getEggCatalog();
+      if (result.data.success) {
+        setEggCatalog(result.data.data.catalog);
+      }
     } catch (error) {
-      console.error("Failed to load egg preview:", error);
+      console.error("Failed to load egg catalog:", error);
     }
   };
 
@@ -78,10 +84,8 @@ const Hatchery = () => {
   const handleConnectWallet = async () => {
     const result = await connect();
     if (result.success) {
-      // Try to login with wallet first, if not registered, prompt for registration
       const loginResult = await loginWithWallet();
       if (!loginResult.success) {
-        // If login fails, try registration with minimal data
         await registerWithWallet({ username: `user_${account.slice(2, 8)}` });
       }
     }
@@ -97,12 +101,16 @@ const Hatchery = () => {
         eggType,
         currency: CURRENCIES.COINS,
       });
-      if (result.success) {
-        addEgg(result.data.egg);
-        updateCoins(-result.data.egg.purchasePrice);
+
+      if (result.data.success) {
+        // Use addEgg from GameContext to add the new egg
+        const newEgg = result.data.data.egg;
+        addEgg(newEgg);
+
+        updateCoins(-newEgg.purchasePrice);
         alert(`Purchased ${eggType} egg successfully!`);
       } else {
-        alert(result.error || "Purchase failed");
+        alert(result.data.error || "Purchase failed");
       }
     } catch (error) {
       console.error("Failed to purchase egg:", error);
@@ -118,12 +126,15 @@ const Hatchery = () => {
 
     try {
       const result = await gameAPI.getFreeEgg();
-      if (result.success) {
-        addEgg(result.data.egg);
+      if (result.data.success) {
+        // Use addEgg from GameContext to add the free egg
+        const newEgg = result.data.data.egg;
+        addEgg(newEgg);
+
         updateFreeRolls(-1);
         alert("Free egg claimed successfully!");
       } else {
-        alert(result.error || "Failed to claim free egg");
+        alert(result.data.error || "Failed to claim free egg");
       }
     } catch (error) {
       console.error("Failed to claim free egg:", error);
@@ -131,111 +142,156 @@ const Hatchery = () => {
     }
   };
 
-  // Hatch egg - now supports both traditional and blockchain hatching
-  const hatchEgg = async (eggId = null) => {
+  // Hatch a specific egg - FIXED VERSION
+  // Hatch a specific egg - FIXED VERSION
+  const hatchEgg = async (eggId) => {
     if (!isAuthenticated) return;
 
-    // Check network for blockchain hatching
-    if (useBlockchainHatch && !isCorrectNetwork) {
-      const switchResult = await switchNetwork(31337);
-      if (!switchResult.success) {
-        alert("Please switch to localhost network for blockchain hatching");
-        return;
-      }
-    }
-
     setIsHatching(true);
-
-    // Check if using free roll or has enough coins
-    const canUseFreeRoll = user.freeRolls > 0;
-    const hatchCost = GAME_CONFIG?.HATCH_COST || 50;
-
-    if (!canUseFreeRoll && user.coins < hatchCost) {
-      alert(`Not enough coins! Hatching costs ${hatchCost} coins.`);
-      setIsHatching(false);
-      return;
-    }
-
     setShowHatchAnimation(true);
 
     try {
-      let result;
+      console.log("Attempting to hatch egg:", eggId);
 
-      if (useBlockchainHatch && isConnected) {
-        // Blockchain hatching - this would need to be implemented in your backend
-        // to mint the NFT after hatching
-        result = await gameAPI.hatchEggOnBlockchain({
-          eggId,
-          useFreeRoll: canUseFreeRoll,
-          eggType: selectedEggType,
-          walletAddress: account,
-        });
-      } else {
-        // Traditional hatching
-        result = await gameAPI.hatchEgg({
-          eggId,
-          useFreeRoll: canUseFreeRoll,
-          eggType: selectedEggType,
-        });
-      }
+      // FIX: Use direct API call instead of going through the hook
+      const result = await gameAPI.eggs.hatchEgg(eggId);
+      console.log("Raw API response:", result);
 
-      if (result.success && result.data.pet) {
-        addPet(result.data.pet);
-        setNewlyHatchedPet(result.data.pet);
+      // The response structure from axios is different
+      if (result.data && result.data.success) {
+        const responseData = result.data;
 
-        if (!canUseFreeRoll) {
-          updateCoins(-hatchCost);
+        if (responseData.data && responseData.data.result) {
+          const hatchResult = responseData.data.result;
+
+          if (hatchResult.type === "Pet") {
+            addPet(hatchResult.data);
+            setNewlyHatchedPet(hatchResult.data);
+            console.log("New pet hatched:", hatchResult.data);
+          }
+
+          // Update user stats
+          if (responseData.data.user) {
+            console.log("Updated user data:", responseData.data.user);
+            // Update the user context with new data
+            updateProfile(responseData.data.user);
+          }
+
+          // Reload game data to refresh eggs and pets
+          await loadGameData();
+
+          setTimeout(() => {
+            setShowHatchAnimation(false);
+            setIsHatching(false);
+          }, 3000);
         } else {
-          updateFreeRolls(-1);
+          throw new Error(
+            responseData.message || "Hatching failed - no result data"
+          );
         }
-
-        // Reload blockchain NFTs if using blockchain
-        if (useBlockchainHatch) {
-          await loadBlockchainNFTs();
-        }
-
-        // Auto-hide animation after delay
-        setTimeout(() => {
-          setShowHatchAnimation(false);
-          setIsHatching(false);
-        }, 3000);
       } else {
-        throw new Error(result.error || "Hatching failed");
+        throw new Error(result.data?.message || "Hatching failed");
       }
     } catch (error) {
       console.error("Hatching failed:", error);
+      console.error("Full error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       alert(`Hatching failed: ${error.message}`);
       setShowHatchAnimation(false);
       setIsHatching(false);
     }
   };
 
-  // Quick hatch (no specific egg)
-  const quickHatch = () => {
-    hatchEgg(null);
+  // Add this to your Hatchery component
+  const forceRefreshUserData = async () => {
+    try {
+      const response = await gameAPI.auth.getProfile();
+      if (response.data.success) {
+        console.log("User data refreshed:", response.data.data.user);
+        // This should update your user context
+      }
+    } catch (error) {
+      console.error("Failed to refresh user data:", error);
+    }
   };
 
-  // Get egg cost
+  // Call this when component mounts and after important actions
+  useEffect(() => {
+    if (isAuthenticated) {
+      forceRefreshUserData();
+    }
+  }, [isAuthenticated]);
+
+  // Quick hatch (purchase and hatch immediately)
+  const quickHatch = async () => {
+    if (!isAuthenticated) return;
+
+    // First purchase the egg
+    setIsPurchasing(true);
+    try {
+      const purchaseResult = await gameAPI.purchaseEgg({
+        eggType: selectedEggType,
+        currency: CURRENCIES.COINS,
+      });
+
+      if (purchaseResult.data.success) {
+        const newEgg = purchaseResult.data.data.egg;
+        // Use addEgg from GameContext to add the new egg
+        addEgg(newEgg);
+        updateCoins(-newEgg.purchasePrice);
+
+        // Then immediately hatch it
+        await hatchEgg(newEgg.id);
+      } else {
+        alert(purchaseResult.data.error || "Purchase failed");
+      }
+    } catch (error) {
+      console.error("Quick hatch failed:", error);
+      alert(`Quick hatch failed: ${error.message}`);
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
+
+  // Get unhatched eggs for display
+  const getUnhatchedEggs = () => {
+    return eggs.filter((egg) => !egg.isHatched);
+  };
+
+  // Get egg cost from catalog
   const getEggCost = (eggType) => {
-    const costs = {
-      [EGG_TYPES.BASIC]: 100,
-      [EGG_TYPES.PREMIUM]: 250,
-      [EGG_TYPES.COSMETIC]: 150,
-      [EGG_TYPES.MYSTERY]: 200,
-    };
-    return costs[eggType] || costs[EGG_TYPES.BASIC];
+    if (!eggCatalog || !eggCatalog[eggType]) return 100;
+    return eggCatalog[eggType].costs.coins || 100;
   };
 
-  // Format currency for display
+  // Get egg description from catalog
+  const getEggDescription = (eggType) => {
+    if (!eggCatalog || !eggCatalog[eggType]) return "A mysterious egg";
+    return eggCatalog[eggType].description;
+  };
+
+  // Format currency for display - FIXED
   const formatCurrency = (amount, currency = CURRENCIES.COINS) => {
+    if (!amount && amount !== 0) return "0"; // Handle undefined/null
     if (currency === CURRENCIES.ETH) {
       return `${amount} ETH`;
     }
     return amount.toLocaleString();
   };
-
+  // Format tier for display
   // Format tier for display
   const formatTier = (tier) => {
+    if (!tier) {
+      return {
+        emoji: "❓",
+        bgColor: "bg-gray-500",
+        textColor: "text-gray-300",
+      };
+    }
+
     const tierStyles = {
       [PET_RARITIES.COMMON]: {
         emoji: "⚪",
@@ -291,23 +347,16 @@ const Hatchery = () => {
     return tierStyles[tier] || tierStyles[PET_RARITIES.COMMON];
   };
 
-  // Format type for display
-  const formatType = (type) => {
-    const typeNames = {
-      dragon: "Dragon",
-      phoenix: "Phoenix",
-      unicorn: "Unicorn",
-      griffin: "Griffin",
-      wolf: "Wolf",
-      cat: "Cat",
-      dog: "Dog",
-      bird: "Bird",
-    };
-    return { name: typeNames[type] || type };
-  };
-
   // Check if we're on the correct network for blockchain features
   const isCorrectNetwork = networkConfig?.name === "localhost";
+
+  // In your Hatchery component, add this debug useEffect
+  useEffect(() => {
+    console.log("User data:", user);
+    console.log("Wallet coins:", user?.coins);
+    console.log("Wallet balance:", user?.balance);
+    console.log("Is authenticated:", isAuthenticated);
+  }, [user, isAuthenticated]);
 
   // Get connection status message
   const getConnectionStatus = () => {
@@ -374,12 +423,8 @@ const Hatchery = () => {
     );
   }
 
-  const eggTypes = [
-    EGG_TYPES.BASIC,
-    EGG_TYPES.PREMIUM,
-    EGG_TYPES.COSMETIC,
-    "MYSTERY",
-  ];
+  const eggTypes = [EGG_TYPES.BASIC, EGG_TYPES.COSMETIC, EGG_TYPES.ATTRIBUTE];
+  const unhatchedEggs = getUnhatchedEggs();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -408,7 +453,7 @@ const Hatchery = () => {
               <div className="space-y-3">
                 {eggTypes.map((eggType) => (
                   <button
-                    key={eggType}
+                    key={`egg-type-${eggType}`}
                     onClick={() => setSelectedEggType(eggType)}
                     className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                       selectedEggType === eggType
@@ -418,17 +463,11 @@ const Hatchery = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-bold text-white">{eggType} Egg</h4>
+                        <h4 className="font-bold text-white capitalize">
+                          {eggType} Egg
+                        </h4>
                         <p className="text-gray-400 text-sm">
-                          Chance for{" "}
-                          {eggType === EGG_TYPES.PREMIUM
-                            ? "Uncommon+"
-                            : eggType === "MYSTERY"
-                            ? "Rare+"
-                            : eggType === EGG_TYPES.COSMETIC
-                            ? "Special Skins"
-                            : "Common+"}{" "}
-                          pets
+                          {getEggDescription(eggType)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -476,43 +515,56 @@ const Hatchery = () => {
               </div>
             </div>
 
-            {/* Egg Preview */}
-            {eggPreview && (
-              <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
-                <h3 className="text-xl font-bold text-white mb-4">
-                  Possible Outcomes
-                </h3>
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {eggPreview.map((pet, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div
-                          className={`w-8 h-8 rounded-full ${
-                            formatTier(pet.tier).bgColor
-                          } flex items-center justify-center text-white text-sm`}
-                        >
-                          {formatTier(pet.tier).emoji}
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">
-                            {pet.tier}
+            {/* Egg Drop Rates from Catalog */}
+            {eggCatalog &&
+              eggCatalog[selectedEggType] &&
+              eggCatalog[selectedEggType].dropRates && (
+                <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
+                  <h3 className="text-xl font-bold text-white mb-4">
+                    Drop Rates
+                  </h3>
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {Object.entries(eggCatalog[selectedEggType].dropRates).map(
+                      ([rarity, rateData]) => {
+                        // Handle both object format {name, chance} and simple number format
+                        const rate =
+                          typeof rateData === "object" && rateData !== null
+                            ? rateData.chance
+                            : rateData;
+                        const displayName =
+                          (typeof rateData === "object" && rateData !== null
+                            ? rateData.name
+                            : rarity) || "Unknown";
+
+                        return (
+                          <div
+                            key={`drop-rate-${rarity}`}
+                            className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className={`w-8 h-8 rounded-full ${
+                                  formatTier(rarity).bgColor
+                                } flex items-center justify-center text-white text-sm`}
+                              >
+                                {formatTier(rarity).emoji}
+                              </div>
+                              <div>
+                                <div className="text-white font-medium capitalize">
+                                  {displayName?.toLowerCase() || "unknown"}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-blue-400 text-sm font-medium">
+                              {rate}%
+                            </div>
                           </div>
-                          <div className="text-gray-400 text-sm">
-                            {formatType(pet.type).name}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-blue-400 text-sm font-medium">
-                        {pet.probability}
-                      </div>
-                    </div>
-                  ))}
+                        );
+                      }
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Center Column - Hatching Area */}
@@ -532,11 +584,11 @@ const Hatchery = () => {
                       🥚
                     </div>
 
-                    <h3 className="text-2xl font-bold text-white mb-2">
+                    <h3 className="text-2xl font-bold text-white mb-2 capitalize">
                       {selectedEggType} Egg
                     </h3>
                     <p className="text-gray-400 mb-6">
-                      Ready to hatch an amazing pet!
+                      {getEggDescription(selectedEggType)}
                     </p>
 
                     {/* Blockchain Hatch Option */}
@@ -568,21 +620,21 @@ const Hatchery = () => {
                         onClick={quickHatch}
                         disabled={
                           isHatching ||
-                          (user.freeRolls === 0 &&
-                            user.coins < (GAME_CONFIG?.HATCH_COST || 50)) ||
+                          isPurchasing ||
+                          user.coins < getEggCost(selectedEggType) ||
                           (useBlockchainHatch && !isCorrectNetwork)
                         }
                         className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105"
                       >
-                        {isHatching ? (
+                        {isHatching || isPurchasing ? (
                           <span className="flex items-center justify-center">
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Hatching...
+                            {isPurchasing ? "Purchasing..." : "Hatching..."}
                           </span>
-                        ) : user.freeRolls > 0 ? (
-                          `Hatch with Free Roll (${user.freeRolls} left)`
                         ) : (
-                          `Hatch Egg (${GAME_CONFIG?.HATCH_COST || 50} Coins)`
+                          `Quick Hatch (${formatCurrency(
+                            getEggCost(selectedEggType)
+                          )})`
                         )}
                       </button>
 
@@ -633,7 +685,9 @@ const Hatchery = () => {
                     <span className="font-bold">Coins</span>
                   </div>
                   <div className="text-2xl font-bold text-white">
-                    {formatCurrency(user.coins || 0)}
+                    {user?.coins !== undefined
+                      ? user.coins.toLocaleString()
+                      : "0"}
                   </div>
                 </div>
                 <div className="bg-gray-700 rounded-lg p-4">
@@ -661,13 +715,13 @@ const Hatchery = () => {
                 </div>
                 <div className="text-center p-2 bg-gray-700 rounded">
                   <div className="text-white font-bold">{eggs.length}</div>
-                  <div className="text-gray-400">Game Eggs</div>
+                  <div className="text-gray-400">Total Eggs</div>
                 </div>
                 <div className="text-center p-2 bg-gray-700 rounded">
                   <div className="text-white font-bold">
-                    {blockchainEggs.length}
+                    {unhatchedEggs.length}
                   </div>
-                  <div className="text-gray-400">NFT Eggs</div>
+                  <div className="text-gray-400">Ready to Hatch</div>
                 </div>
               </div>
             </div>
@@ -677,11 +731,11 @@ const Hatchery = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-white">Your Eggs</h3>
                 <span className="text-gray-400 text-sm">
-                  {eggs.length} game • {blockchainEggs.length} NFT
+                  {unhatchedEggs.length} ready • {blockchainEggs.length} NFT
                 </span>
               </div>
 
-              {eggs.length === 0 && blockchainEggs.length === 0 ? (
+              {unhatchedEggs.length === 0 && blockchainEggs.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-6xl mb-4">🥚</div>
                   <p className="text-gray-400">No eggs yet</p>
@@ -692,9 +746,9 @@ const Hatchery = () => {
               ) : (
                 <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
                   {/* Game Eggs */}
-                  {eggs.slice(0, 3).map((egg, index) => (
+                  {unhatchedEggs.slice(0, 5).map((egg) => (
                     <div
-                      key={`game-${egg.id || index}`}
+                      key={`game-egg-${egg.id}`}
                       className="flex items-center justify-between p-3 bg-gray-700 rounded-lg"
                     >
                       <div className="flex items-center space-x-3">
@@ -702,31 +756,30 @@ const Hatchery = () => {
                           🥚
                         </div>
                         <div>
-                          <div className="text-white font-medium">
-                            {egg.eggType || EGG_TYPES.BASIC} Egg
+                          <div className="text-white font-medium capitalize">
+                            {egg.type} Egg
                           </div>
-                          <div className="text-gray-400 text-sm capitalize">
-                            {egg.rarity?.toLowerCase() || "common"} •{" "}
-                            {egg.isHatched ? "Hatched" : "Ready to hatch"}
+                          <div className="text-gray-400 text-sm">
+                            Ready to hatch
                           </div>
                         </div>
                       </div>
-                      {!egg.isHatched && (
-                        <button
-                          onClick={() => hatchEgg(egg.id)}
-                          disabled={isHatching}
-                          className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded text-white text-sm transition-colors"
-                        >
-                          Hatch
-                        </button>
-                      )}
+                      <button
+                        onClick={() => hatchEgg(egg.id)}
+                        disabled={isHatching}
+                        className="px-3 py-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 rounded text-white text-sm transition-colors"
+                      >
+                        Hatch
+                      </button>
                     </div>
                   ))}
 
                   {/* Blockchain Eggs */}
                   {blockchainEggs.slice(0, 2).map((egg, index) => (
                     <div
-                      key={`blockchain-${index}`}
+                      key={`blockchain-egg-${
+                        egg.tokenId || egg.id || `index-${index}`
+                      }`}
                       className="flex items-center justify-between p-3 bg-purple-700 rounded-lg border border-purple-500"
                     >
                       <div className="flex items-center space-x-3">
@@ -747,77 +800,16 @@ const Hatchery = () => {
                     </div>
                   ))}
 
-                  {(eggs.length > 3 || blockchainEggs.length > 2) && (
+                  {(unhatchedEggs.length > 5 || blockchainEggs.length > 2) && (
                     <div className="text-center pt-2">
                       <span className="text-gray-400 text-sm">
                         +
-                        {Math.max(eggs.length - 3, 0) +
+                        {Math.max(unhatchedEggs.length - 5, 0) +
                           Math.max(blockchainEggs.length - 2, 0)}{" "}
                         more eggs
                       </span>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-
-            {/* Pet Inventory Summary */}
-            <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
-              <h3 className="text-xl font-bold text-white mb-4">
-                Your Pets ({pets.length + blockchainPets.length})
-              </h3>
-              {pets.length === 0 && blockchainPets.length === 0 ? (
-                <p className="text-gray-400 text-center py-4">
-                  No pets yet. Hatch some eggs!
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {/* Tier Summary */}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {Object.values(PET_RARITIES).map((tier) => {
-                      const gameCount = pets.filter(
-                        (pet) => pet.tier === tier
-                      ).length;
-                      const blockchainCount = blockchainPets.filter(
-                        (pet) => pet.rarity === tier
-                      ).length;
-                      const totalCount = gameCount + blockchainCount;
-
-                      if (totalCount === 0) return null;
-
-                      return (
-                        <div
-                          key={tier}
-                          className="flex items-center justify-between p-2 bg-gray-700 rounded"
-                        >
-                          <span
-                            className={`${
-                              formatTier(tier).textColor
-                            } font-medium flex items-center space-x-1`}
-                          >
-                            <span>{formatTier(tier).emoji}</span>
-                            <span>{tier}</span>
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            {blockchainCount > 0 && (
-                              <span className="text-purple-400 text-xs">
-                                {blockchainCount} NFT
-                              </span>
-                            )}
-                            <span className="text-white font-bold">
-                              {totalCount}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-600 text-center">
-                    <p className="text-gray-400 text-sm">
-                      {pets.length} game pets • {blockchainPets.length} NFT pets
-                    </p>
-                  </div>
                 </div>
               )}
             </div>

@@ -17,6 +17,29 @@ router.post("/battles/start", gameActionLimiter, GameController.startBattle);
 router.get("/battles/history", GameController.getBattleHistory);
 router.get("/battles/available-pets", GameController.getAvailableBattlePets);
 
+// ===== BLOCKCHAIN INTEGRATION =====
+router.post("/wallet/connect", GameController.connectWallet);
+router.post("/wallet/disconnect", GameController.disconnectWallet);
+router.get("/blockchain/assets", GameController.getBlockchainAssets);
+
+// ===== MARKETPLACE =====
+router.post(
+  "/marketplace/list",
+  gameActionLimiter,
+  GameController.listOnMarketplace
+);
+router.post(
+  "/marketplace/buy",
+  gameActionLimiter,
+  GameController.buyFromMarketplace
+);
+router.get("/marketplace/listings", GameController.getMarketplaceListings);
+router.post(
+  "/marketplace/cancel",
+  gameActionLimiter,
+  GameController.cancelMarketplaceListing
+);
+
 // ===== QUEST SYSTEM =====
 router.get("/quests/available", GameController.getAvailableQuests);
 router.post(
